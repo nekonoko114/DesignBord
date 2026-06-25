@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate } from "react-router";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { CustomCursor } from "../components/CustomCursor";
 import { requireUserRole } from "../utils/auth.server";
-import { useClerk } from "@clerk/react-router";
+import { useClerk, useUser } from "@clerk/react-router";
 import type { Route } from "./+types/admin";
 
 export async function loader(args: Route.LoaderArgs) {
@@ -22,6 +22,7 @@ export default function AdminLayout() {
 function AdminLayoutContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { signOut } = useClerk();
+  const { user } = useUser();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -75,15 +76,25 @@ function AdminLayoutContent() {
 
         <div style={{ marginTop: 'auto', paddingTop: '2rem', borderTop: '1px solid rgba(0,0,0,0.05)', display: 'flex', justifyContent: isSidebarOpen ? 'flex-start' : 'center', overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ 
-              minWidth: '40px', height: '40px', borderRadius: '50%', background: 'var(--text-color)', 
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '600'
-            }}>
-              AD
-            </div>
+            {user?.imageUrl ? (
+              <img 
+                src={user.imageUrl} 
+                alt="Avatar" 
+                style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: 'var(--neu-border)', boxShadow: 'var(--shadow-out)' }} 
+              />
+            ) : (
+              <div style={{ 
+                minWidth: '40px', height: '40px', borderRadius: '50%', background: 'var(--text-color)', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '600'
+              }}>
+                {user?.firstName?.substring(0, 2).toUpperCase() || "AD"}
+              </div>
+            )}
             {isSidebarOpen && (
               <div style={{ fontFamily: 'var(--font-gothic)', whiteSpace: 'nowrap' }}>
-                <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-color)' }}>Administrator</div>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-color)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {user?.fullName || user?.primaryEmailAddress?.emailAddress || "管理者"}
+                </div>
                 <div onClick={handleLogout} style={{ opacity: 0.6, fontSize: '0.75rem', marginTop: '0.2rem', cursor: 'pointer' }} className="admin-logout-btn">ログアウト</div>
               </div>
             )}
