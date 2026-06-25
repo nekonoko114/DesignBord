@@ -63,7 +63,7 @@ function AdminLayoutContent() {
             fontSize: isSidebarOpen ? '1.3rem' : '1.1rem', 
             fontWeight: 700, margin: 0, color: 'var(--text-color)', whiteSpace: 'nowrap'
           }}>
-            {isSidebarOpen ? 'DesignBoard' : 'DBP'}
+            DBP
           </h1>
           {isSidebarOpen && (
             <p style={{ opacity: 0.5, fontSize: '0.7rem', letterSpacing: '0.05em', marginTop: '0.3rem', fontFamily: 'var(--font-gothic)' }}>DesignBoard Portal</p>
