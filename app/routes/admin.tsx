@@ -76,20 +76,11 @@ function AdminLayoutContent() {
 
         <div style={{ marginTop: 'auto', paddingTop: '2rem', borderTop: '1px solid rgba(0,0,0,0.05)', display: 'flex', justifyContent: isSidebarOpen ? 'flex-start' : 'center', overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            {user?.imageUrl ? (
-              <img 
-                src={user.imageUrl} 
-                alt="Avatar" 
-                style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: 'var(--neu-border)', boxShadow: 'var(--shadow-out)' }} 
-              />
-            ) : (
-              <div style={{ 
-                minWidth: '40px', height: '40px', borderRadius: '50%', background: 'var(--text-color)', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '600'
-              }}>
-                {user?.firstName?.substring(0, 2).toUpperCase() || "AD"}
-              </div>
-            )}
+            <img 
+              src="/Original.png" 
+              alt="Avatar" 
+              style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: 'var(--neu-border)', boxShadow: 'var(--shadow-out)' }} 
+            />
             {isSidebarOpen && (
               <div style={{ fontFamily: 'var(--font-gothic)', whiteSpace: 'nowrap' }}>
                 <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-color)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
