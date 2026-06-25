@@ -413,37 +413,37 @@ export default function ContentHub() {
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <header style={{ marginBottom: '4rem' }}>
-        <h2 className="font-mincho" style={{ fontSize: '2.5rem', fontWeight: 500, marginBottom: '1rem' }}>原稿ご提出ボード</h2>
-        <p className="font-gothic" style={{ opacity: 0.7, letterSpacing: '0.05em' }}>
+      <header style={{ marginBottom: '2rem' }}>
+        <h2 className="font-mincho" style={{ fontSize: '1.8rem', fontWeight: 500, marginBottom: '0.6rem' }}>原稿ご提出ボード</h2>
+        <p className="font-gothic" style={{ opacity: 0.7, letterSpacing: '0.05em', fontSize: '0.85rem', lineHeight: '1.5' }}>
           ウェブサイトに掲載する文章の作成・ご提出をお願いいたします。<br />
           セクションはご自由に増やすことができますので、必要に応じて項目を追加してください。
         </p>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '3rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '1.5rem' }}>
         
         {/* Navigation Sidebar */}
-        <div className="neumorphic-panel" style={{ padding: '2rem 1.5rem', height: 'fit-content' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', paddingLeft: '0.5rem' }}>
-            <h3 className="font-mincho" style={{ fontSize: '1.1rem', margin: 0 }}>構成一覧</h3>
+        <div className="neumorphic-panel" style={{ padding: '1.2rem 1rem', height: 'fit-content' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingLeft: '0.3rem' }}>
+            <h3 className="font-mincho" style={{ fontSize: '0.95rem', margin: 0 }}>構成一覧</h3>
           </div>
           
-          <ul className="font-gothic" style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
+          <ul className="font-gothic" style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
             {sections.map(sec => (
               <li 
                 key={sec.id}
                 onClick={() => setActiveSectionId(sec.id)}
                 style={{ 
-                  padding: '1rem 1.5rem', 
-                  borderRadius: '12px',
+                  padding: '0.6rem 1rem', 
+                  borderRadius: '8px',
                   cursor: 'pointer',
                   fontWeight: activeSectionId === sec.id ? 500 : 400,
                   color: activeSectionId === sec.id ? 'var(--accent-color)' : 'var(--text-color)',
                   boxShadow: activeSectionId === sec.id ? 'var(--shadow-in)' : 'none',
                   border: activeSectionId === sec.id ? 'var(--neu-border)' : '1px solid transparent',
                   transition: 'var(--transition-smooth)',
-                  fontSize: '0.95rem',
+                  fontSize: '0.85rem',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis'
@@ -456,27 +456,27 @@ export default function ContentHub() {
 
           <button 
             onClick={handleAddSection}
-            style={{ width: '100%', padding: '0.8rem', fontSize: '0.9rem', background: 'transparent', boxShadow: 'var(--shadow-out)', border: 'var(--neu-border)' }}
+            style={{ width: '100%', padding: '0.6rem', fontSize: '0.8rem', background: 'transparent', boxShadow: 'var(--shadow-out)', border: 'var(--neu-border)' }}
           >
             新規セクションを追加
           </button>
         </div>
 
         {/* Editor Area */}
-        <div className="neumorphic-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+        <div className="neumorphic-panel" style={{ padding: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
             <input 
               type="text" 
               value={activeSection?.title || ''}
               onChange={(e) => handleTitleChange(e.target.value)}
               className="font-mincho"
               style={{ 
-                fontSize: '1.5rem', 
+                fontSize: '1.25rem', 
                 fontWeight: 600, 
                 border: 'none', 
                 background: 'transparent',
                 boxShadow: 'none',
-                padding: '0.5rem',
+                padding: '0.3rem',
                 borderBottom: '1px dashed var(--neu-border)',
                 borderRadius: 0,
                 color: 'var(--text-color)',
@@ -485,7 +485,7 @@ export default function ContentHub() {
               placeholder="セクション名"
             />
             
-            <span className="font-gothic" style={{ fontSize: '0.8rem', opacity: 0.6, letterSpacing: '0.05em', marginTop: '1rem', transition: 'var(--transition-smooth)' }}>
+            <span className="font-gothic" style={{ fontSize: '0.75rem', opacity: 0.6, letterSpacing: '0.05em', marginTop: '0.5rem', transition: 'var(--transition-smooth)' }}>
               {savingStatus === 'idle' && 'すべての変更は保存されています'}
               {savingStatus === 'saving' && '自動保存中...'}
               {savingStatus === 'saved' && '変更が保存されました'}
@@ -493,7 +493,7 @@ export default function ContentHub() {
             </span>
           </div>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem', marginBottom: '2.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '1.5rem' }}>
             <textarea 
               value={activeSection?.content || ''}
               onChange={e => handleContentChange(e.target.value)}
@@ -502,11 +502,14 @@ export default function ContentHub() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               style={{ 
-                minHeight: '350px', 
+                minHeight: '280px', 
                 resize: 'vertical',
+                padding: '1rem',
                 border: isDragging ? '2px dashed var(--accent-color)' : '1px solid var(--neu-border)',
                 backgroundColor: isDragging ? 'rgba(184, 156, 109, 0.05)' : 'transparent',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                fontSize: '0.9rem',
+                lineHeight: '1.6'
               }}
             />
 
@@ -515,7 +518,7 @@ export default function ContentHub() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               style={{ 
-                padding: '2rem', 
+                padding: '1.2rem', 
                 border: isDragging ? '2px dashed var(--accent-color)' : '1px dashed var(--neu-border)', 
                 borderRadius: '12px', 
                 background: isDragging ? 'rgba(184, 156, 109, 0.05)' : 'var(--bg-color)',
@@ -523,9 +526,9 @@ export default function ContentHub() {
                 textAlign: 'center'
               }}
             >
-              <h4 className="font-mincho" style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>参考資料・画像</h4>
-              <p className="font-gothic" style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '1.5rem' }}>
-                このセクションに関連する画像やPDFなどの資料をここにドラッグ＆ドロップするか、ファイルを選択してください。（1ファイル50MBまで）
+              <h4 className="font-mincho" style={{ fontSize: '0.95rem', marginBottom: '0.5rem', marginTop: 0 }}>参考資料・画像</h4>
+              <p className="font-gothic" style={{ fontSize: '0.75rem', opacity: 0.7, marginBottom: '1rem', lineHeight: '1.4' }}>
+                画像やPDFなどの資料をここにドラッグ＆ドロップするか、ファイルを選択してください。
               </p>
               
               <div style={{ marginBottom: '2rem' }}>

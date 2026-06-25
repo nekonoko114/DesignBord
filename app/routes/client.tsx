@@ -29,8 +29,8 @@ function ClientLayoutContent() {
       
       {/* SaaS Sidebar */}
       <aside style={{ 
-        width: isSidebarOpen ? '280px' : '90px', 
-        padding: isSidebarOpen ? '2.5rem 2rem' : '2.5rem 1rem', 
+        width: isSidebarOpen ? '240px' : '80px', 
+        padding: isSidebarOpen ? '2rem 1.2rem' : '2rem 0.8rem', 
         borderRight: 'var(--neu-border)', 
         boxShadow: '4px 0 20px rgba(0,0,0,0.03)', 
         zIndex: 10,
@@ -64,27 +64,27 @@ function ClientLayoutContent() {
           {isSidebarOpen ? '❮' : '❯'}
         </button>
 
-        <div style={{ marginBottom: '3.5rem', display: 'flex', flexDirection: 'column', alignItems: isSidebarOpen ? 'flex-start' : 'center', overflow: 'hidden' }}>
+        <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: isSidebarOpen ? 'flex-start' : 'center', overflow: 'hidden' }}>
           <h1 className="kinetic-text" style={{ 
-            fontSize: isSidebarOpen ? '1.5rem' : '1.2rem', 
+            fontSize: isSidebarOpen ? '1.3rem' : '1.1rem', 
             fontWeight: 600, margin: 0, letterSpacing: '0.1em',
             whiteSpace: 'nowrap'
           }}>
             {isSidebarOpen ? 'DesignBoard' : 'DB'}
           </h1>
           {isSidebarOpen && (
-            <p style={{ opacity: 0.6, fontSize: '0.75rem', letterSpacing: '0.15em', marginTop: '0.5rem', fontFamily: 'var(--font-gothic)', whiteSpace: 'nowrap' }}>クライアントポータル</p>
+            <p style={{ opacity: 0.6, fontSize: '0.7rem', letterSpacing: '0.15em', marginTop: '0.4rem', fontFamily: 'var(--font-gothic)', whiteSpace: 'nowrap' }}>クライアントポータル</p>
           )}
         </div>
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, alignItems: isSidebarOpen ? 'stretch' : 'center' }}>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', flex: 1, alignItems: isSidebarOpen ? 'stretch' : 'center' }}>
           <NavItem to="/client/dashboard" label="ダッシュボード" icon="📊" isOpen={isSidebarOpen} />
           <NavItem to="/client/discovery" label="ヒアリングボード" icon="📋" isOpen={isSidebarOpen} />
           <NavItem to="/client/content-hub" label="原稿ご提出" icon="📝" isOpen={isSidebarOpen} />
           <NavItem to="/client/review" label="デザインレビュー" icon="✨" isOpen={isSidebarOpen} />
         </nav>
 
-        <div style={{ marginTop: 'auto', paddingTop: '2.5rem', borderTop: 'var(--neu-border)', display: 'flex', justifyContent: isSidebarOpen ? 'flex-start' : 'center', overflow: 'hidden' }}>
+        <div style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: 'var(--neu-border)', display: 'flex', justifyContent: isSidebarOpen ? 'flex-start' : 'center', overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{ 
               minWidth: '44px', height: '44px', borderRadius: '50%', 
@@ -107,7 +107,7 @@ function ClientLayoutContent() {
       </aside>
 
       {/* Main Content Area */}
-      <main style={{ flex: 1, padding: isSidebarOpen ? '4rem 5rem' : '4rem 3rem', overflowY: 'auto', maxHeight: '100vh', position: 'relative', transition: 'var(--transition-smooth)' }}>
+      <main style={{ flex: 1, padding: isSidebarOpen ? '2rem 3rem' : '2rem 2rem', overflowY: 'auto', maxHeight: '100vh', position: 'relative', transition: 'var(--transition-smooth)' }}>
         <Outlet />
       </main>
       <style>{`
@@ -131,7 +131,7 @@ function NavItem({ to, label, icon, isOpen }: { to: string; label: string; icon:
       to={to}
       title={!isOpen ? label : undefined}
       style={({ isActive }) => ({
-        padding: isOpen ? '1.2rem 1.5rem' : '1.2rem',
+        padding: isOpen ? '0.8rem 1.2rem' : '0.8rem',
         borderRadius: '16px',
         textDecoration: 'none',
         color: isActive ? 'var(--accent-color)' : 'var(--text-color)',
