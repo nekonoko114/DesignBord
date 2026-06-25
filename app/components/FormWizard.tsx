@@ -24,6 +24,7 @@ export function FormWizard({
   const [termsAccepted, setTermsAccepted] = useState(initialTermsAccepted);
   const [showTermsModal, setShowTermsModal] = useState(!initialTermsAccepted);
   const [draftSavedMessage, setDraftSavedMessage] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "saving" | "error" | null>(null);
   
   const { currentUser, refreshProjectData } = useAuth();
   const submit = useSubmit();
@@ -75,6 +76,33 @@ export function FormWizard({
       localStorage.setItem('designBoardStep', currentStep.toString());
     }
   }, [formData, currentStep, isLoaded]);
+
+  // Debounced auto-save to server on formData changes
+  useEffect(() => {
+    if (!isLoaded || currentStep === TOTAL_STEPS || isSubmitting || showTermsModal || !termsAccepted) return;
+
+    setAutoSaveStatus("saving");
+    const timer = setTimeout(() => {
+      try {
+        submit(
+          { 
+            data: JSON.stringify(formData), 
+            actionType: "draft",
+            termsAccepted: termsAccepted.toString()
+          },
+          { method: "post" }
+        );
+        setAutoSaveStatus("saved");
+        const hideTimer = setTimeout(() => setAutoSaveStatus(null), 3000);
+        return () => clearTimeout(hideTimer);
+      } catch (e) {
+        console.error("Auto save error:", e);
+        setAutoSaveStatus("error");
+      }
+    }, 2000); // 2 seconds debounce
+
+    return () => clearTimeout(timer);
+  }, [formData, isLoaded, currentStep, showTermsModal, termsAccepted]);
 
   const updateData = (fields: Partial<FormData>) => {
     setFormData((prev) => ({ ...prev, ...fields }));
@@ -160,6 +188,38 @@ export function FormWizard({
 
   return (
     <div style={{ position: 'relative' }}>
+      {/* 自動保存ステータス通知 */}
+      {autoSaveStatus && (
+        <div style={{
+          position: 'fixed',
+          top: '2rem',
+          right: '2rem',
+          padding: '0.8rem 1.2rem',
+          borderRadius: '12px',
+          background: 'rgba(20, 20, 20, 0.85)',
+          border: 'var(--neu-border)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: 'var(--shadow-out)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.6rem',
+          fontSize: '0.8rem',
+          fontFamily: 'var(--font-gothic)',
+          zIndex: 1100,
+          color: autoSaveStatus === 'saved' ? 'var(--accent-color)' : (autoSaveStatus === 'saving' ? '#3b82f6' : '#dc3545'),
+          transition: 'all 0.3s ease'
+        }}>
+          <div style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            background: autoSaveStatus === 'saved' ? 'var(--accent-color)' : (autoSaveStatus === 'saving' ? '#3b82f6' : '#dc3545'),
+          }} />
+          {autoSaveStatus === 'saved' && '下書きを自動保存しました'}
+          {autoSaveStatus === 'saving' && '下書き保存中...'}
+          {autoSaveStatus === 'error' && '保存に失敗しました'}
+        </div>
+      )}
       {/* 初回規約同意オーバーレイ */}
       {showTermsModal && (
         <div style={{
@@ -352,7 +412,29 @@ export function FormWizard({
 
           {/* 一時保存フッター (Step 1〜5 の時に表示) */}
           {currentStep < 6 && (
-            <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--neu-border)', display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ 
+              marginTop: '2rem', 
+              paddingTop: '1.5rem', 
+              borderTop: '1px solid var(--neu-border)', 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '1rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', opacity: 0.6 }} className="font-gothic">
+                <span style={{
+                  display: 'inline-block',
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: autoSaveStatus === 'saved' ? 'var(--accent-color)' : (autoSaveStatus === 'saving' ? '#3b82f6' : 'var(--accent-color)'),
+                }} />
+                {autoSaveStatus === 'saved' && '入力内容は自動保存されました'}
+                {autoSaveStatus === 'saving' && '下書き保存中...'}
+                {autoSaveStatus === 'error' && '自動保存に失敗しました'}
+                {!autoSaveStatus && '入力内容は自動で下書き保存されます'}
+              </div>
               <button
                 type="button"
                 onClick={handleDraftSave}
@@ -361,13 +443,15 @@ export function FormWizard({
                   background: 'transparent',
                   border: '1px solid var(--accent-color)',
                   color: 'var(--accent-color)',
-                  padding: '0.8rem 1.8rem',
+                  padding: '0.6rem 1.2rem',
+                  fontSize: '0.8rem',
                   boxShadow: 'none',
+                  borderRadius: '8px',
                   opacity: isSubmitting ? 0.6 : 1,
                   cursor: isSubmitting ? 'not-allowed' : 'pointer'
                 }}
               >
-                {isSubmitting ? '保存中...' : '一時保存（下書き）'}
+                {isSubmitting ? '保存中...' : '手動で一時保存'}
               </button>
             </div>
           )}

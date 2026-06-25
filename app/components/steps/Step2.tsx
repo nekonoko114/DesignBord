@@ -7,10 +7,27 @@ interface StepProps {
   onPrev: () => void;
 }
 
+const siteTypes = [
+  { value: 'corporate', label: 'コーポレートサイト', desc: '企業の信頼性を高める公式HP', icon: '🏢' },
+  { value: 'lp', label: 'ランディングページ (LP)', desc: '商品・サービスの成約率を最大化', icon: '🎯' },
+  { value: 'ec', label: 'ECサイト', desc: 'ネットショップ・物販・オンライン決済', icon: '🛒' },
+  { value: 'recruit', label: '採用サイト', desc: '求職者へ向けた魅力発信・応募獲得', icon: '👥' },
+  { value: 'other', label: 'その他', desc: 'メディア、ポートフォリオ、独自システム等', icon: '✨' },
+];
+
 export function Step2({ data, updateData, onNext, onPrev }: StepProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onNext();
+  };
+
+  const handleTextareaChange = (
+    e: React.ChangeEvent<HTMLTextAreaElement>,
+    field: 'background' | 'purpose' | 'mustConvey'
+  ) => {
+    updateData({ [field]: e.target.value });
+    e.target.style.height = 'auto';
+    e.target.style.height = `${e.target.scrollHeight}px`;
   };
 
   return (
@@ -20,61 +37,111 @@ export function Step2({ data, updateData, onNext, onPrev }: StepProps) {
       </h2>
       <p style={{ marginBottom: '2rem', opacity: 0.8 }}>Webサイトを制作する背景や目的を教えてください。</p>
 
-      <form onSubmit={handleSubmit} className="asymmetry-container">
-        <div className="glass-panel">
-          <div className="form-group">
-            <label htmlFor="siteType">サイト種別</label>
-            <select
-              id="siteType"
-              value={data.siteType}
-              onChange={(e) => updateData({ siteType: e.target.value })}
-              required
-            >
-              <option value="">選択してください</option>
-              <option value="corporate">コーポレートサイト</option>
-              <option value="lp">ランディングページ (LP)</option>
-              <option value="ec">ECサイト</option>
-              <option value="recruit">採用サイト</option>
-              <option value="other">その他</option>
-            </select>
+      <form onSubmit={handleSubmit}>
+        {/* サイト種別ビジュアル選択カード */}
+        <div className="glass-panel" style={{ marginBottom: '2rem' }}>
+          <label style={{ display: 'block', marginBottom: '1.2rem', fontWeight: 600, fontSize: '1.1rem' }}>サイト種別</label>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: '1.2rem'
+          }}>
+            {siteTypes.map((item) => {
+              const isSelected = data.siteType === item.value;
+              return (
+                <div
+                  key={item.value}
+                  onClick={() => updateData({ siteType: item.value })}
+                  style={{
+                    padding: '1.8rem 1rem',
+                    borderRadius: '16px',
+                    border: isSelected ? '1px solid var(--accent-color)' : '1px solid var(--glass-border)',
+                    background: isSelected ? 'rgba(184, 156, 109, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                    boxShadow: isSelected ? 'var(--shadow-in)' : 'var(--shadow-out)',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '0.8rem',
+                    textAlign: 'center',
+                    transform: isSelected ? 'scale(1.02)' : 'scale(1)'
+                  }}
+                >
+                  <span style={{ fontSize: '2.5rem', opacity: isSelected ? 1 : 0.6, transition: '0.3s' }}>{item.icon}</span>
+                  <span style={{ fontWeight: 600, fontSize: '0.95rem', color: isSelected ? 'var(--accent-color)' : 'var(--text-color)', transition: '0.3s' }}>{item.label}</span>
+                  <span style={{ fontSize: '0.75rem', opacity: 0.5, lineHeight: '1.4' }}>{item.desc}</span>
+                </div>
+              );
+            })}
           </div>
-
-          <div className="form-group">
-            <label htmlFor="background">制作の背景</label>
-            <textarea
-              id="background"
-              rows={3}
-              value={data.background}
-              onChange={(e) => updateData({ background: e.target.value })}
-              placeholder="例）名刺代わりのサイトが欲しい、リニューアルしたい等"
-              required
-            />
-          </div>
+          {/* Validation element */}
+          <input type="hidden" name="siteType" value={data.siteType} required />
         </div>
 
-        <div className="glass-panel" style={{ transform: 'translateY(-1rem)' }}>
-          <div className="form-group">
-            <label htmlFor="purpose">具体的なサイトの目的</label>
-            <textarea
-              id="purpose"
-              rows={3}
-              value={data.purpose}
-              onChange={(e) => updateData({ purpose: e.target.value })}
-              placeholder="例）ビジネスを始めるにあたって対外的な信用を得るため"
-              required
-            />
+        <div className="asymmetry-container">
+          <div className="glass-panel">
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label htmlFor="background">制作の背景</label>
+              <textarea
+                id="background"
+                rows={3}
+                value={data.background}
+                onChange={(e) => handleTextareaChange(e, 'background')}
+                onFocus={(e) => {
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
+                placeholder="例）名刺代わりのサイトが欲しい、リニューアルしたい等"
+                required
+                style={{ resize: 'none', overflowY: 'hidden', minHeight: '80px' }}
+              />
+              <div style={{ textAlign: 'right', fontSize: '0.75rem', opacity: 0.4, marginTop: '0.4rem' }} className="font-gothic">
+                {data.background.length} 文字
+              </div>
+            </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="mustConvey">絶対に伝えたい情報</label>
-            <textarea
-              id="mustConvey"
-              rows={3}
-              value={data.mustConvey}
-              onChange={(e) => updateData({ mustConvey: e.target.value })}
-              placeholder="例）サービス内容の詳細や、独自の強みについて"
-              required
-            />
+          <div className="glass-panel" style={{ transform: 'translateY(-1rem)' }}>
+            <div className="form-group">
+              <label htmlFor="purpose">具体的なサイトの目的</label>
+              <textarea
+                id="purpose"
+                rows={3}
+                value={data.purpose}
+                onChange={(e) => handleTextareaChange(e, 'purpose')}
+                onFocus={(e) => {
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
+                placeholder="例）ビジネスを始めるにあたって対外的な信用を得るため"
+                required
+                style={{ resize: 'none', overflowY: 'hidden', minHeight: '80px' }}
+              />
+              <div style={{ textAlign: 'right', fontSize: '0.75rem', opacity: 0.4, marginTop: '0.4rem' }} className="font-gothic">
+                {data.purpose.length} 文字
+              </div>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label htmlFor="mustConvey">絶対に伝えたい情報</label>
+              <textarea
+                id="mustConvey"
+                rows={3}
+                value={data.mustConvey}
+                onChange={(e) => handleTextareaChange(e, 'mustConvey')}
+                onFocus={(e) => {
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
+                placeholder="例）サービス内容の詳細や、独自の強みについて"
+                required
+                style={{ resize: 'none', overflowY: 'hidden', minHeight: '80px' }}
+              />
+              <div style={{ textAlign: 'right', fontSize: '0.75rem', opacity: 0.4, marginTop: '0.4rem' }} className="font-gothic">
+                {data.mustConvey.length} 文字
+              </div>
+            </div>
           </div>
         </div>
 
