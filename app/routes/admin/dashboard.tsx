@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLoaderData, useNavigate, useFetcher } from "react-router";
 import type { Route } from "./+types/dashboard";
 import { requireUserRole } from "../../utils/auth.server";
@@ -109,6 +109,54 @@ export async function action(args: Route.ActionArgs) {
     }
   }
 
+  if (intent === "createProject") {
+    const clientEmail = formData.get("clientEmail") as string;
+    const projectTitle = formData.get("projectTitle") as string;
+    const bookingLimitVal = formData.get("bookingLimit") as string;
+    const bookingLimit = parseInt(bookingLimitVal, 10) || 3;
+
+    if (!clientEmail || !projectTitle) {
+      return { error: "メールアドレスとプロジェクトタイトルは必須です。" };
+    }
+
+    try {
+      // Check if user already exists
+      const existingUser = await db.prepare("SELECT id FROM users WHERE email = ?").bind(clientEmail).first();
+      let clientId = existingUser?.id;
+      
+      const newProjectId = crypto.randomUUID();
+      const newHearingId = crypto.randomUUID();
+      const batchQueries = [];
+
+      if (!clientId) {
+        // Create pending placeholder user
+        clientId = `pending_${crypto.randomUUID()}`;
+        batchQueries.push(
+          db.prepare("INSERT INTO users (id, email, role) VALUES (?, ?, 'client')").bind(clientId, clientEmail)
+        );
+      }
+
+      // Add project and initial blank hearing
+      batchQueries.push(
+        db.prepare(
+          "INSERT INTO projects (id, client_id, title, progress_rate, booking_limit, last_activity_at, created_at) VALUES (?, ?, ?, 0, ?, strftime('%s', 'now'), strftime('%s', 'now'))"
+        ).bind(newProjectId, clientId, projectTitle, bookingLimit)
+      );
+
+      batchQueries.push(
+        db.prepare(
+          "INSERT INTO hearings (id, project_id, status, overview_data, content_data, terms_accepted, updated_at) VALUES (?, ?, 'draft', '{}', '{}', 0, strftime('%s', 'now'))"
+        ).bind(newHearingId, newProjectId)
+      );
+
+      await db.batch(batchQueries);
+      return { success: true };
+    } catch (e) {
+      console.error("Failed to create project in D1:", e);
+      return { error: "プロジェクトの作成に失敗しました。" };
+    }
+  }
+
   return {};
 }
 
@@ -118,6 +166,19 @@ export default function AdminDashboard() {
   const fetcher = useFetcher();
 
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [clientEmail, setClientEmail] = useState("");
+  const [projectTitle, setProjectTitle] = useState("");
+  const [bookingLimit, setBookingLimit] = useState(3);
+
+  useEffect(() => {
+    if (fetcher.data && (fetcher.data as any).success) {
+      setIsModalOpen(false);
+      setClientEmail("");
+      setProjectTitle("");
+      setBookingLimit(3);
+    }
+  }, [fetcher.data]);
 
   const getPhaseLabel = (phase: string) => {
     switch(phase) {
@@ -209,8 +270,27 @@ export default function AdminDashboard() {
           <p className="font-gothic" style={{ opacity: 0.6, marginTop: '0.5rem' }}>全クライアントの進行状況を管理します。</p>
         </div>
 
-        {/* Bell Notifications */}
-        <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          {/* 新規プロジェクト作成ボタン */}
+          <button
+            onClick={() => setIsModalOpen(true)}
+            style={{
+              background: 'var(--accent-color)',
+              color: '#fff',
+              border: 'none',
+              padding: '0.8rem 1.5rem',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              boxShadow: '0 4px 10px rgba(184, 156, 109, 0.3)',
+            }}
+            className="font-gothic"
+          >
+            新規プロジェクト作成
+          </button>
+
+          {/* Bell Notifications */}
+          <div style={{ position: 'relative' }}>
           <button 
             onClick={() => setShowNotifications(!showNotifications)}
             style={{
@@ -281,7 +361,8 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
-      </header>
+      </div>
+    </header>
 
       {/* Projects List Panel */}
       <div className="neumorphic-panel" style={{ padding: '0', overflow: 'hidden' }}>
@@ -408,6 +489,145 @@ export default function AdminDashboard() {
           </tbody>
         </table>
       </div>
+
+      {/* 新規プロジェクト作成モーダル */}
+      {isModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+        }}>
+          <div className="neumorphic-panel" style={{
+            width: '450px',
+            padding: '2.5rem',
+            position: 'relative',
+          }}>
+            <h3 className="font-mincho" style={{ margin: '0 0 1.5rem 0', fontSize: '1.5rem', fontWeight: 600 }}>新規プロジェクト作成</h3>
+            
+            <fetcher.Form method="post">
+              <input type="hidden" name="intent" value="createProject" />
+              
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label className="font-gothic" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', opacity: 0.8 }}>
+                  クライアントのメールアドレス
+                </label>
+                <input
+                  type="email"
+                  name="clientEmail"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  required
+                  placeholder="client@example.com"
+                  style={{
+                    width: '100%',
+                    padding: '0.8rem',
+                    borderRadius: '8px',
+                    border: 'var(--neu-border)',
+                    background: 'var(--neumorphic-dark)',
+                    color: 'var(--text-color)',
+                    boxShadow: 'var(--shadow-in)',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label className="font-gothic" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', opacity: 0.8 }}>
+                  プロジェクトタイトル
+                </label>
+                <input
+                  type="text"
+                  name="projectTitle"
+                  value={projectTitle}
+                  onChange={(e) => setProjectTitle(e.target.value)}
+                  required
+                  placeholder="例: コーポレートサイト制作"
+                  style={{
+                    width: '100%',
+                    padding: '0.8rem',
+                    borderRadius: '8px',
+                    border: 'var(--neu-border)',
+                    background: 'var(--neumorphic-dark)',
+                    color: 'var(--text-color)',
+                    boxShadow: 'var(--shadow-in)',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '2rem' }}>
+                <label className="font-gothic" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', opacity: 0.8 }}>
+                  初回面談予約上限（回数）
+                </label>
+                <input
+                  type="number"
+                  name="bookingLimit"
+                  value={bookingLimit}
+                  onChange={(e) => setBookingLimit(parseInt(e.target.value, 10) || 3)}
+                  min="1"
+                  max="10"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.8rem',
+                    borderRadius: '8px',
+                    border: 'var(--neu-border)',
+                    background: 'var(--neumorphic-dark)',
+                    color: 'var(--text-color)',
+                    boxShadow: 'var(--shadow-in)',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              {(fetcher.data as any)?.error && (
+                <div style={{ color: '#dc3545', marginBottom: '1.2rem', fontSize: '0.9rem', textAlign: 'center' }}>
+                  {(fetcher.data as any).error}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  style={{
+                    padding: '0.6rem 1.2rem',
+                    background: 'transparent',
+                    border: 'var(--neu-border)',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    color: 'var(--text-color)',
+                  }}
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    padding: '0.6rem 1.5rem',
+                    background: 'var(--accent-color)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  作成する
+                </button>
+              </div>
+            </fetcher.Form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

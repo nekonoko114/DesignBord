@@ -57,11 +57,27 @@ export const loader = (args: Route.LoaderArgs) => {
           const email = auth.sessionClaims?.email || "";
           const defaultRole = role || "client";
           
-          await db.prepare(
-            "INSERT INTO users (id, email, role) VALUES (?, ?, ?)"
-          ).bind(userId, email, defaultRole).run();
+          // Check if there is a pending placeholder user with matching email
+          const pendingUser = await db.prepare(
+            "SELECT * FROM users WHERE email = ? AND role = 'client' AND id LIKE 'pending_%'"
+          ).bind(email).first();
           
-          userResult = { id: userId, email, role: defaultRole };
+          if (pendingUser) {
+            const placeholderId = pendingUser.id;
+            // Migrating pending user id to real Clerk userId
+            await db.batch([
+              db.prepare("INSERT INTO users (id, email, role) VALUES (?, ?, ?)").bind(userId, email, defaultRole),
+              db.prepare("UPDATE projects SET client_id = ? WHERE client_id = ?").bind(userId, placeholderId),
+              db.prepare("DELETE FROM users WHERE id = ?").bind(placeholderId)
+            ]);
+            userResult = { id: userId, email, role: defaultRole };
+          } else {
+            await db.prepare(
+              "INSERT INTO users (id, email, role) VALUES (?, ?, ?)"
+            ).bind(userId, email, defaultRole).run();
+            
+            userResult = { id: userId, email, role: defaultRole };
+          }
         }
 
         user = {
