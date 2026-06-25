@@ -13,6 +13,7 @@ import "./app.css";
 import { clerkMiddleware, rootAuthLoader } from "@clerk/react-router/server";
 import { ClerkProvider } from "@clerk/react-router";
 import { seedDatabase } from "./utils/db.server";
+import { jaJP } from "@clerk/localizations";
 
 // Export middleware for React Router v8_middleware pipeline
 export const middleware = [clerkMiddleware()];
@@ -154,7 +155,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 // Wrap application with ClerkProvider
 export default function App({ loaderData }: Route.ComponentProps) {
   return (
-    <ClerkProvider loaderData={loaderData}>
+    <ClerkProvider loaderData={loaderData} localization={jaJP}>
       <Outlet />
     </ClerkProvider>
   );
