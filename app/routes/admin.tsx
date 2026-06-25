@@ -63,10 +63,10 @@ function AdminLayoutContent() {
             fontSize: isSidebarOpen ? '1.3rem' : '1.1rem', 
             fontWeight: 700, margin: 0, color: 'var(--text-color)', whiteSpace: 'nowrap'
           }}>
-            {isSidebarOpen ? 'DesignBoard Admin' : 'DBA'}
+            {isSidebarOpen ? 'DesignBoard' : 'DBP'}
           </h1>
           {isSidebarOpen && (
-            <p style={{ opacity: 0.5, fontSize: '0.7rem', letterSpacing: '0.05em', marginTop: '0.3rem', fontFamily: 'var(--font-gothic)' }}>管理者ポータル</p>
+            <p style={{ opacity: 0.5, fontSize: '0.7rem', letterSpacing: '0.05em', marginTop: '0.3rem', fontFamily: 'var(--font-gothic)' }}>DesignBoard Portal</p>
           )}
         </div>
 
@@ -93,7 +93,7 @@ function AdminLayoutContent() {
             {isSidebarOpen && (
               <div style={{ fontFamily: 'var(--font-gothic)', whiteSpace: 'nowrap' }}>
                 <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-color)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {user?.fullName || user?.primaryEmailAddress?.emailAddress || "管理者"}
+                  マスター
                 </div>
                 <div onClick={handleLogout} style={{ opacity: 0.6, fontSize: '0.75rem', marginTop: '0.2rem', cursor: 'pointer' }} className="admin-logout-btn">ログアウト</div>
               </div>
