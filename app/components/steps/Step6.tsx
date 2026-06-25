@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { FormData } from '../../types/form';
-import { useNavigate } from 'react-router';
 
 interface StepProps {
   data: FormData;
@@ -11,15 +10,13 @@ interface StepProps {
 }
 
 export function Step6({ data, onPrev, onReset, onSubmit, isSubmitting }: StepProps) {
-  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const handleSubmit = async () => {
     setError(null);
     try {
       await onSubmit();
-      alert('ヒアリング内容を送信しました！ダッシュボードへ戻ります。');
-      navigate('/client/dashboard');
     } catch (e) {
       setError('データの送信に失敗しました。もう一度お試しいただくか、管理者へお問い合わせください。');
     }
@@ -37,7 +34,7 @@ export function Step6({ data, onPrev, onReset, onSubmit, isSubmitting }: StepPro
       
       <div style={{ padding: '1.5rem', background: 'rgba(184, 156, 109, 0.05)', borderRadius: '12px', borderLeft: '4px solid var(--accent-color)', marginBottom: '3rem' }}>
         <p className="font-gothic" style={{ margin: 0, fontWeight: 500, color: 'var(--text-color)' }}>
-          ✅ 次のステップ：オンラインでのお打ち合わせ（キックオフ）<br/>
+          次のステップ：オンラインでのお打ち合わせ（キックオフ）<br/>
           <span style={{ fontSize: '0.9rem', opacity: 0.8, fontWeight: 400 }}>担当者より、ご入力いただいた内容を元に具体的なご提案をさせていただきます。</span>
         </p>
       </div>
@@ -86,24 +83,48 @@ export function Step6({ data, onPrev, onReset, onSubmit, isSubmitting }: StepPro
           marginBottom: '2rem', 
           textAlign: 'center' 
         }}>
-          ⚠️ {error}
+          送信エラー: {error}
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center', marginTop: '3rem' }}>
+      {/* 最終規約同意チェックボックス */}
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        gap: '0.8rem', 
+        margin: '2rem 0', 
+        padding: '1rem', 
+        background: 'rgba(255, 255, 255, 0.02)',
+        borderRadius: '8px',
+        border: '1px solid var(--neu-border)'
+      }}>
+        <input 
+          type="checkbox" 
+          id="final-consent" 
+          checked={termsAccepted} 
+          onChange={(e) => setTermsAccepted(e.target.checked)}
+          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+        />
+        <label htmlFor="final-consent" className="font-gothic" style={{ fontSize: '0.9rem', cursor: 'pointer', opacity: 0.9 }}>
+          キャンセルポリシーおよびヒアリング提出規約に同意し、回答を最終提出します。
+        </label>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center', marginTop: '1.5rem' }}>
         <button 
           type="button" 
           onClick={handleSubmit} 
-          disabled={isSubmitting}
+          disabled={isSubmitting || !termsAccepted}
           style={{ 
             width: '100%', 
             maxWidth: '400px', 
-            background: 'var(--accent-color)', 
-            color: 'var(--bg-color)', 
+            background: termsAccepted ? 'var(--accent-color)' : 'rgba(255, 255, 255, 0.05)', 
+            color: termsAccepted ? 'var(--bg-color)' : 'var(--text-muted)', 
             border: 'none', 
-            boxShadow: '0 8px 15px rgba(184, 156, 109, 0.3)',
+            boxShadow: termsAccepted ? '0 8px 15px rgba(184, 156, 109, 0.3)' : 'none',
             opacity: isSubmitting ? 0.7 : 1,
-            cursor: isSubmitting ? 'not-allowed' : 'pointer'
+            cursor: (isSubmitting || !termsAccepted) ? 'not-allowed' : 'pointer'
           }}
         >
           {isSubmitting ? '送信中...' : 'この内容で送信する'}

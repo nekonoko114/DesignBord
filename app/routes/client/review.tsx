@@ -1,84 +1,178 @@
-import { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { db } from '../../firebase';
-import { collection, doc, onSnapshot, setDoc, serverTimestamp, query, orderBy, updateDoc } from 'firebase/firestore';
+import { useState, useRef, useEffect } from 'react';
+import { useLoaderData, useSubmit } from 'react-router';
+import type { Route } from './+types/review';
+import { requireUserRole } from '../../utils/auth.server';
+import { sendDiscordNotification } from '../../utils/discord.server';
 
 interface Design {
   id: string;
   title: string;
   imageUrl: string;
-  createdAt: any;
+  createdAt: number;
 }
 
 interface Comment {
   id: string;
+  fileId: string;
+  userId: string;
   x: number;
   y: number;
   text: string;
-  author: 'client' | 'admin';
-  createdAt: any;
-  resolved: boolean;
+  authorRole: 'client' | 'admin';
+  authorEmail: string;
+  createdAt: number;
+}
+
+export async function loader(args: Route.LoaderArgs) {
+  const { context, request } = args;
+  const { userId } = await requireUserRole(args, ["client"]);
+  const db = (context as any).cloudflare.env.DB;
+
+  let designs: Design[] = [];
+  let comments: Comment[] = [];
+
+  try {
+    const project = await db.prepare("SELECT id FROM projects WHERE client_id = ?").bind(userId).first();
+    if (project) {
+      // Get reviewable files (images and design comps)
+      const fileRecords = await db.prepare(
+        "SELECT id, file_type, r2_url, created_at FROM files WHERE project_id = ? AND file_type IN ('image', 'design_comp') ORDER BY created_at DESC"
+      ).bind(project.id).all();
+
+      designs = (fileRecords.results || []).map((file: any) => ({
+        id: file.id,
+        title: file.file_type === 'design_comp' ? 'デザインカンプ' : '参考画像',
+        imageUrl: file.r2_url,
+        createdAt: file.created_at
+      }));
+
+      if (designs.length > 0) {
+        // Load annotations for the first/active design by default
+        const activeFileId = designs[0].id;
+        const annotationRecords = await db.prepare(`
+          SELECT a.id, a.file_id, a.user_id, a.pos_x, a.pos_y, a.comment, a.created_at, u.role, u.email
+          FROM annotations a
+          JOIN users u ON a.user_id = u.id
+          WHERE a.file_id = ?
+          ORDER BY a.created_at ASC
+        `).bind(activeFileId).all();
+
+        comments = (annotationRecords.results || []).map((ann: any) => ({
+          id: ann.id,
+          fileId: ann.file_id,
+          userId: ann.user_id,
+          x: ann.pos_x,
+          y: ann.pos_y,
+          text: ann.comment,
+          authorRole: ann.role,
+          authorEmail: ann.email,
+          createdAt: ann.created_at
+        }));
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load design review data:", e);
+  }
+
+  return {
+    designs,
+    initialComments: comments,
+  };
+}
+
+export async function action(args: Route.ActionArgs) {
+  const { context, request } = args;
+  const { userId } = await requireUserRole(args, ["client"]);
+  const db = (context as any).cloudflare.env.DB;
+
+  const formData = await request.formData();
+  const intent = formData.get("intent") as string;
+
+  try {
+    const project = await db.prepare("SELECT id, title FROM projects WHERE client_id = ?").bind(userId).first();
+    if (!project) {
+      return new Response(JSON.stringify({ error: "プロジェクトが見つかりません。" }), { status: 404 });
+    }
+
+    if (intent === "add-annotation") {
+      const fileId = formData.get("fileId") as string;
+      const posX = parseFloat(formData.get("posX") as string);
+      const posY = parseFloat(formData.get("posY") as string);
+      const commentText = formData.get("comment") as string;
+
+      if (!fileId || isNaN(posX) || isNaN(posY) || !commentText) {
+        return new Response(JSON.stringify({ error: "入力パラメータが不正です。" }), { status: 400 });
+      }
+
+      const annotationId = crypto.randomUUID();
+      await db.prepare(
+        "INSERT INTO annotations (id, file_id, user_id, pos_x, pos_y, comment, created_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%s', 'now'))"
+      ).bind(annotationId, fileId, userId, posX, posY, commentText).run();
+
+      // Update last activity timestamp
+      await db.prepare("UPDATE projects SET last_activity_at = strftime('%s', 'now') WHERE id = ?").bind(project.id).run();
+
+      // Dispatch Discord notification
+      await sendDiscordNotification({
+        title: "コメント追加のお知らせ",
+        description: `クライアント様がデザインにフィードバック（アノテーション）を追加しました。`,
+        fields: [
+          { name: "プロジェクト名", value: project.title as string, inline: true },
+          { name: "コメント内容", value: commentText, inline: false },
+          { name: "ピン位置", value: `X: ${posX.toFixed(1)}%, Y: ${posY.toFixed(1)}%`, inline: true }
+        ],
+        color: 12098669, // #b89c6d (ゴールド)
+      });
+
+      return new Response(JSON.stringify({ success: true }));
+    }
+
+    if (intent === "resolve-annotation") {
+      const annotationId = formData.get("annotationId") as string;
+      if (!annotationId) {
+        return new Response(JSON.stringify({ error: "アノテーションIDがありません。" }), { status: 400 });
+      }
+
+      // Delete/Resolve annotation
+      await db.prepare("DELETE FROM annotations WHERE id = ?").bind(annotationId).run();
+      await db.prepare("UPDATE projects SET last_activity_at = strftime('%s', 'now') WHERE id = ?").bind(project.id).run();
+
+      return new Response(JSON.stringify({ success: true }));
+    }
+
+    return new Response(JSON.stringify({ error: "無効なリクエストです。" }), { status: 400 });
+  } catch (e) {
+    console.error("Action handler error in review:", e);
+    return new Response(JSON.stringify({ error: "サーバー処理中にエラーが発生しました。" }), { status: 500 });
+  }
 }
 
 export default function ClientReview() {
-  const { currentUser } = useAuth();
-  const [designs, setDesigns] = useState<Design[]>([]);
-  const [activeDesignId, setActiveDesignId] = useState<string | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { designs, initialComments } = useLoaderData<typeof loader>();
+  const [activeDesignId, setActiveDesignId] = useState<string | null>(designs[0]?.id || null);
+  const [comments, setComments] = useState<Comment[]>(initialComments);
   
   const [newCommentPos, setNewCommentPos] = useState<{ x: number, y: number } | null>(null);
   const [newCommentText, setNewCommentText] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const imageRef = useRef<HTMLImageElement>(null);
+  const submit = useSubmit();
 
-  // デザイン一覧の取得
-  useEffect(() => {
-    if (!currentUser) return;
-    
-    const designsRef = collection(db, 'projects', currentUser.uid, 'designs');
-    const q = query(designsRef, orderBy('createdAt', 'desc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedDesigns: Design[] = [];
-      snapshot.forEach(doc => {
-        fetchedDesigns.push({ id: doc.id, ...doc.data() } as Design);
-      });
-      setDesigns(fetchedDesigns);
-      if (fetchedDesigns.length > 0 && !activeDesignId) {
-        setActiveDesignId(fetchedDesigns[0].id);
-      }
-      setLoading(false);
-    });
-    
-    return unsubscribe;
-  }, [currentUser]);
-
-  // アクティブなデザインのコメント取得
-  useEffect(() => {
-    if (!currentUser || !activeDesignId) return;
-    
-    const commentsRef = collection(db, 'projects', currentUser.uid, 'designs', activeDesignId, 'comments');
-    const unsubscribe = onSnapshot(commentsRef, (snapshot) => {
-      const fetchedComments: Comment[] = [];
-      snapshot.forEach(doc => {
-        fetchedComments.push({ id: doc.id, ...doc.data() } as Comment);
-      });
-      // 未解決のものを手前に、新しいものを下に
-      fetchedComments.sort((a, b) => {
-        if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
-        return (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0);
-      });
-      setComments(fetchedComments);
-    });
-    
-    return unsubscribe;
-  }, [currentUser, activeDesignId]);
+  const handleDesignChange = async (designId: string) => {
+    setActiveDesignId(designId);
+    setNewCommentPos(null);
+    try {
+      const formData = new FormData();
+      formData.append("intent", "revalidate");
+      submit(formData, { method: "post" });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
     if (!imageRef.current) return;
     const rect = imageRef.current.getBoundingClientRect();
-    
-    // パーセンテージで座標を計算
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     
@@ -87,40 +181,70 @@ export default function ClientReview() {
   };
 
   const handleAddComment = async () => {
-    if (!currentUser || !activeDesignId || !newCommentPos || !newCommentText.trim()) return;
+    if (!activeDesignId || !newCommentPos || !newCommentText.trim()) return;
+    setIsSubmitting(true);
     
-    const commentId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
-    const commentRef = doc(db, 'projects', currentUser.uid, 'designs', activeDesignId, 'comments', commentId);
-    
-    await setDoc(commentRef, {
-      x: newCommentPos.x,
-      y: newCommentPos.y,
-      text: newCommentText,
-      author: 'client',
-      createdAt: serverTimestamp(),
-      resolved: false
-    });
-    
-    setNewCommentPos(null);
-    setNewCommentText('');
+    try {
+      const formData = new FormData();
+      formData.append("intent", "add-annotation");
+      formData.append("fileId", activeDesignId);
+      formData.append("posX", newCommentPos.x.toString());
+      formData.append("posY", newCommentPos.y.toString());
+      formData.append("comment", newCommentText);
+
+      const response = await fetch(window.location.pathname, {
+        method: "POST",
+        body: formData
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        setNewCommentPos(null);
+        setNewCommentText('');
+        submit(null, { method: "get" });
+      } else {
+        alert("コメントの追加に失敗しました。");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("通信エラーが発生しました。");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-  
+
   const handleResolveComment = async (commentId: string) => {
-    if (!currentUser || !activeDesignId) return;
-    const commentRef = doc(db, 'projects', currentUser.uid, 'designs', activeDesignId, 'comments', commentId);
-    await updateDoc(commentRef, { resolved: true });
+    try {
+      const formData = new FormData();
+      formData.append("intent", "resolve-annotation");
+      formData.append("annotationId", commentId);
+
+      const response = await fetch(window.location.pathname, {
+        method: "POST",
+        body: formData
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        setComments(prev => prev.filter(c => c.id !== commentId));
+      } else {
+        alert("コメントの解決処理に失敗しました。");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("通信エラーが発生しました。");
+    }
   };
 
   const activeDesign = designs.find(d => d.id === activeDesignId);
 
-  if (loading) {
-    return <div style={{ padding: '2rem' }}>読み込み中...</div>;
-  }
+  useEffect(() => {
+    setComments(initialComments);
+  }, [initialComments]);
 
   if (designs.length === 0) {
     return (
       <div style={{ maxWidth: '1000px', margin: '0 auto', textAlign: 'center', padding: '4rem 0' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1rem', opacity: 0.5 }}>🎨</div>
         <h2 className="font-mincho" style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>デザインは準備中です</h2>
         <p style={{ opacity: 0.7 }}>
           現在、デザインを作成中です。デザインが提出されるとこちらに表示され、画像をクリックして修正指示などのコメントを残すことができるようになります。
@@ -128,6 +252,8 @@ export default function ClientReview() {
       </div>
     );
   }
+
+  const watermarkText = "DesignBoard PROTOTYPE - DO NOT COPY";
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 8rem)' }}>
@@ -139,18 +265,15 @@ export default function ClientReview() {
       </header>
 
       <div style={{ display: 'flex', gap: '2rem', flex: 1, minHeight: 0 }}>
-        {/* 左側：デザイン画像プレビュー */}
+        {/* Left: Design Preview */}
         <div className="neumorphic-panel" style={{ flex: 1, padding: '1rem', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           
-          {/* デザイン切り替えタブ */}
+          {/* Design Switch Tabs */}
           <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem', borderBottom: 'var(--neu-border)', marginBottom: '1rem' }}>
             {designs.map(design => (
               <button 
                 key={design.id}
-                onClick={() => {
-                  setActiveDesignId(design.id);
-                  setNewCommentPos(null);
-                }}
+                onClick={() => handleDesignChange(design.id)}
                 style={{ 
                   padding: '0.5rem 1.5rem', borderRadius: '40px', fontSize: '0.9rem', whiteSpace: 'nowrap',
                   background: activeDesignId === design.id ? 'var(--accent-color)' : 'transparent',
@@ -166,16 +289,68 @@ export default function ClientReview() {
 
           <div style={{ position: 'relative', flex: 1, overflow: 'auto', background: 'var(--neumorphic-dark)', borderRadius: '12px', display: 'flex', justifyContent: 'center' }}>
             {activeDesign && (
-              <div style={{ position: 'relative', display: 'inline-block', height: 'max-content' }}>
+              <div 
+                style={{ 
+                  position: 'relative', 
+                  display: 'inline-block', 
+                  height: 'max-content',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none'
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+              >
                 <img 
                   ref={imageRef}
                   src={activeDesign.imageUrl} 
                   alt={activeDesign.title} 
-                  style={{ display: 'block', maxWidth: '100%', cursor: 'crosshair', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
+                  draggable={false}
+                  style={{ 
+                    display: 'block', 
+                    maxWidth: '100%', 
+                    cursor: 'crosshair', 
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                    pointerEvents: 'auto',
+                  }}
                   onClick={handleImageClick}
                 />
                 
-                {/* 既存のコメントピン */}
+                {/* Watermark Overlay */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  pointerEvents: 'none',
+                  overflow: 'hidden',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gridTemplateRows: 'repeat(6, 1fr)',
+                  gap: '1rem',
+                  opacity: 0.07,
+                  zIndex: 5
+                }}>
+                  {Array.from({ length: 24 }).map((_, i) => (
+                    <div 
+                      key={i} 
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transform: 'rotate(-30deg)',
+                        fontSize: '0.8rem',
+                        fontWeight: 'bold',
+                        color: 'var(--text-color)',
+                        whiteSpace: 'nowrap',
+                        fontFamily: 'var(--font-gothic)'
+                      }}
+                    >
+                      {watermarkText}
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Active Annotation Pins */}
                 {comments.map((comment, i) => (
                   <div 
                     key={comment.id}
@@ -184,7 +359,7 @@ export default function ClientReview() {
                       left: `${comment.x}%`,
                       top: `${comment.y}%`,
                       transform: 'translate(-50%, -100%)',
-                      background: comment.resolved ? 'var(--text-muted)' : (comment.author === 'client' ? 'var(--accent-color)' : '#28a745'),
+                      background: comment.authorRole === 'client' ? 'var(--accent-color)' : '#28a745',
                       color: '#fff',
                       width: '24px',
                       height: '24px',
@@ -201,7 +376,7 @@ export default function ClientReview() {
                   </div>
                 ))}
 
-                {/* 新規コメントピン（入力中） */}
+                {/* New Temporary Pin */}
                 {newCommentPos && (
                   <div style={{
                     position: 'absolute',
@@ -228,7 +403,7 @@ export default function ClientReview() {
           </div>
         </div>
 
-        {/* 右側：コメントリスト */}
+        {/* Right: Comments List Sidebar */}
         <div className="neumorphic-panel" style={{ width: '350px', padding: '1.5rem', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <h3 className="font-mincho" style={{ fontSize: '1.2rem', marginBottom: '1.5rem', borderBottom: 'var(--neu-border)', paddingBottom: '1rem' }}>コメント・修正指示</h3>
           
@@ -241,25 +416,24 @@ export default function ClientReview() {
 
             {comments.map((comment, i) => (
               <div key={comment.id} style={{ 
-                padding: '1rem', borderRadius: '12px', 
-                background: comment.resolved ? 'transparent' : 'var(--bg-color)',
-                border: comment.resolved ? '1px dashed var(--neu-border)' : 'var(--neu-border)',
-                boxShadow: comment.resolved ? 'none' : 'var(--shadow-out)',
-                opacity: comment.resolved ? 0.6 : 1
+                padding: '1rem', 
+                borderRadius: '12px', 
+                background: 'var(--bg-color)',
+                border: 'var(--neu-border)',
+                boxShadow: 'var(--shadow-out)'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ 
                       display: 'inline-block', width: '20px', height: '20px', borderRadius: '50%', 
-                      background: comment.resolved ? 'var(--text-muted)' : (comment.author === 'client' ? 'var(--accent-color)' : '#28a745'),
+                      background: comment.authorRole === 'client' ? 'var(--accent-color)' : '#28a745',
                       color: '#fff', fontSize: '10px', textAlign: 'center', lineHeight: '20px', fontWeight: 'bold'
                     }}>{i + 1}</span>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{comment.author === 'client' ? 'あなた' : 'デザインチーム'}</span>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{comment.authorRole === 'client' ? 'あなた' : 'デザインチーム'}</span>
                   </div>
-                  {comment.resolved && <span style={{ fontSize: '0.7rem', color: '#28a745', border: '1px solid #28a745', padding: '2px 6px', borderRadius: '4px' }}>解決済</span>}
                 </div>
                 <p style={{ fontSize: '0.9rem', margin: 0, whiteSpace: 'pre-wrap' }}>{comment.text}</p>
-                {!comment.resolved && comment.author === 'admin' && (
+                {comment.authorRole === 'admin' && (
                   <div style={{ marginTop: '0.8rem', textAlign: 'right' }}>
                     <button 
                       onClick={() => handleResolveComment(comment.id)}
@@ -273,7 +447,7 @@ export default function ClientReview() {
             ))}
           </div>
 
-          {/* 新規コメント入力フォーム */}
+          {/* New Comment Input Form */}
           {newCommentPos && (
             <div style={{ 
               marginTop: '1rem', padding: '1.2rem', background: 'var(--neumorphic-dark)', 
@@ -288,7 +462,7 @@ export default function ClientReview() {
                 style={{ 
                   width: '100%', minHeight: '80px', padding: '0.8rem', fontSize: '0.9rem', 
                   background: 'var(--bg-color)', border: 'none', borderRadius: '8px',
-                  marginBottom: '1rem', resize: 'vertical'
+                  marginBottom: '1rem', resize: 'vertical', color: 'var(--text-color)'
                 }}
               />
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
@@ -300,13 +474,14 @@ export default function ClientReview() {
                 </button>
                 <button 
                   onClick={handleAddComment}
-                  disabled={!newCommentText.trim()}
+                  disabled={!newCommentText.trim() || isSubmitting}
                   style={{ 
                     padding: '0.5rem 1rem', fontSize: '0.8rem', background: 'var(--accent-color)', 
-                    color: '#fff', border: 'none', opacity: newCommentText.trim() ? 1 : 0.5 
+                    color: '#fff', border: 'none', opacity: (newCommentText.trim() && !isSubmitting) ? 1 : 0.5,
+                    cursor: (newCommentText.trim() && !isSubmitting) ? 'pointer' : 'not-allowed'
                   }}
                 >
-                  送信
+                  {isSubmitting ? '送信中...' : '送信'}
                 </button>
               </div>
             </div>

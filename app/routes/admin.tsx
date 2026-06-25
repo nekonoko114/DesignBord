@@ -1,9 +1,15 @@
 import { useState } from "react";
-import { Outlet, NavLink, useNavigate, Navigate } from "react-router";
+import { Outlet, NavLink, useNavigate } from "react-router";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { CustomCursor } from "../components/CustomCursor";
-import { auth } from "../firebase";
-import { signOut } from "firebase/auth";
+import { requireUserRole } from "../utils/auth.server";
+import { useClerk } from "@clerk/react-router";
+import type { Route } from "./+types/admin";
+
+export async function loader(args: Route.LoaderArgs) {
+  await requireUserRole(args, ["admin"]);
+  return {};
+}
 
 export default function AdminLayout() {
   return (
@@ -15,39 +21,12 @@ export default function AdminLayout() {
 
 function AdminLayoutContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { currentUser, loading } = useAuth();
+  const { signOut } = useClerk();
   const navigate = useNavigate();
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate("/login");
-    } catch (error) {
-      console.error("ログアウトエラー:", error);
-    }
+  const handleLogout = () => {
+    signOut(() => navigate("/login"));
   };
-
-  if (loading) {
-    return (
-      <div style={{
-        display: "flex", flexDirection: "column", minHeight: "100vh",
-        alignItems: "center", justifyContent: "center", backgroundColor: "var(--bg-color)"
-      }}>
-        <div style={{ width: "28px", height: "28px", border: "2px solid rgba(184, 156, 109, 0.1)", borderTopColor: "var(--accent-color)", borderRadius: "50%", animation: "spin 1.2s infinite" }} />
-      </div>
-    );
-  }
-
-  // 管理者権限チェック (環境変数に設定したメールアドレスと一致するか確認)
-  const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-  if (!currentUser) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  if (currentUser.email !== adminEmail) {
-    // 管理者ではない場合はクライアントのダッシュボードへリダイレクト
-    return <Navigate to="/client/dashboard" replace />;
-  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-color)', overflowX: 'hidden' }}>
@@ -92,7 +71,6 @@ function AdminLayoutContent() {
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1 }}>
           <AdminNavItem to="/admin/dashboard" label="プロジェクト一覧" icon="📁" isOpen={isSidebarOpen} />
-          {/* <AdminNavItem to="/admin/clients" label="クライアント管理" icon="👥" isOpen={isSidebarOpen} /> */}
         </nav>
 
         <div style={{ marginTop: 'auto', paddingTop: '2rem', borderTop: '1px solid rgba(0,0,0,0.05)', display: 'flex', justifyContent: isSidebarOpen ? 'flex-start' : 'center', overflow: 'hidden' }}>
@@ -158,3 +136,4 @@ function AdminNavItem({ to, label, icon, isOpen }: { to: string; label: string; 
     </NavLink>
   );
 }
+

@@ -1,7 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { auth, db } from '../firebase';
-import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { createContext, useContext } from 'react';
+import { useRevalidator, useRouteLoaderData } from 'react-router';
 
 export interface ProjectData {
   planName: string;
@@ -13,18 +11,15 @@ export interface ProjectData {
   contentSubmitted: boolean;
 }
 
-const defaultProjectData: ProjectData = {
-  planName: "プレミアム・コーポレートプラン",
-  launchDate: "2026年 7月 3日（目安）",
-  siteType: "コーポレートサイト",
-  directorName: "山田 太郎",
-  currentPhase: "Phase 1",
-  hearingSubmitted: false,
-  contentSubmitted: false
-};
+export interface AuthUser {
+  uid: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'client';
+}
 
 interface AuthContextType {
-  currentUser: User | null;
+  currentUser: AuthUser | null;
   projectData: ProjectData | null;
   loading: boolean;
   refreshProjectData: () => Promise<void>;
@@ -33,7 +28,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({ 
   currentUser: null, 
   projectData: null, 
-  loading: true,
+  loading: false,
   refreshProjectData: async () => {}
 });
 
@@ -42,74 +37,31 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [projectData, setProjectData] = useState<ProjectData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const revalidator = useRevalidator();
+  // Get logged-in user and project information from the root loader
+  const rootData = useRouteLoaderData("root") as { 
+    user: AuthUser | null;
+    project: ProjectData | null;
+  } | null;
 
-  const fetchProjectData = async (uid: string) => {
-    try {
-      const docRef = doc(db, "projects", uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        return docSnap.data() as ProjectData;
-      } else {
-        const initialData = {
-          ...defaultProjectData,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        };
-        await setDoc(docRef, initialData);
-        return defaultProjectData;
-      }
-    } catch (e) {
-      console.error("Failed to load project data in AuthContext:", e);
-      return defaultProjectData;
-    }
-  };
+  const currentUser = rootData?.user ?? null;
+  const projectData = rootData?.project ?? null;
 
   const refreshProjectData = async () => {
-    if (currentUser) {
-      const data = await fetchProjectData(currentUser.uid);
-      setProjectData(data);
-    }
+    // Re-run all active loaders to refresh data from server (D1)
+    revalidator.revalidate();
   };
-
-  useEffect(() => {
-    console.log("[AuthContext] Setting up onAuthStateChanged...");
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("[AuthContext] onAuthStateChanged fired. User:", user ? user.uid : "null");
-      setCurrentUser(user);
-      setLoading(false); // Auth状態が確定したら即座にロード完了とする
-      
-      if (user) {
-        console.log("[AuthContext] Fetching project data for:", user.uid);
-        fetchProjectData(user.uid)
-          .then((data) => {
-            console.log("[AuthContext] Project data fetched successfully");
-            setProjectData(data);
-          })
-          .catch((e) => {
-            console.error("[AuthContext] Error fetching project data:", e);
-          });
-      } else {
-        setProjectData(null);
-      }
-    });
-    return unsubscribe;
-  }, []);
 
   const value = {
     currentUser,
     projectData,
-    loading,
+    loading: false, // Solved server-side, so loading is no longer needed client-side
     refreshProjectData
   };
 
-  console.log("[AuthContext] Rendering Provider. loading:", loading);
-
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }

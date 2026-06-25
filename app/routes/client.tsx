@@ -1,60 +1,27 @@
 import { useState } from "react";
-import { Outlet, NavLink, useNavigate, Navigate } from "react-router";
+import { Outlet, NavLink, useNavigate } from "react-router";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { CustomCursor } from "../components/CustomCursor";
-import { auth } from "../firebase";
-import { signOut } from "firebase/auth";
+import { requireUserRole } from "../utils/auth.server";
+import { useClerk } from "@clerk/react-router";
+import type { Route } from "./+types/client";
+
+export async function loader(args: Route.LoaderArgs) {
+  await requireUserRole(args, ["client"]);
+  return {};
+}
 
 function ClientLayoutContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { currentUser, loading } = useAuth();
+  const { currentUser } = useAuth();
+  const { signOut } = useClerk();
   const navigate = useNavigate();
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate("/login");
-    } catch (error) {
-      console.error("ログアウトエラー:", error);
-    }
+  const handleLogout = () => {
+    signOut(() => navigate("/login"));
   };
 
-  if (loading) {
-    return (
-      <div style={{
-        display: "flex",
-        flexDirection: "column",
-        minHeight: "100vh",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "var(--bg-color)",
-        gap: "1.5rem"
-      }}>
-        <h1 className="kinetic-text" style={{ fontSize: "1.8rem", fontWeight: 600, letterSpacing: "0.15em", margin: 0 }}>
-          DesignBoard
-        </h1>
-        <div style={{
-          width: "28px",
-          height: "28px",
-          border: "2px solid rgba(184, 156, 109, 0.1)",
-          borderTopColor: "var(--accent-color)",
-          borderRadius: "50%",
-          animation: "spin 1.2s cubic-bezier(0.5, 0.1, 0.15, 1) infinite"
-        }} />
-        <style>{`
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
-      </div>
-    );
-  }
-
-  if (!currentUser) {
-    return <Navigate to="/login" replace />;
-  }
-
-  const userDisplayName = currentUser.email ? currentUser.email.split("@")[0] : "お客様";
+  const userDisplayName = currentUser ? currentUser.name : "お客様";
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-color)', overflowX: 'hidden' }}>
@@ -192,3 +159,4 @@ function NavItem({ to, label, icon, isOpen }: { to: string; label: string; icon:
     </NavLink>
   );
 }
+

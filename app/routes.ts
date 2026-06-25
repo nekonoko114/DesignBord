@@ -2,7 +2,9 @@ import { type RouteConfig, index, route, layout } from "@react-router/dev/routes
 
 export default [
   index("routes/index.tsx"),
-  route("login", "routes/login.tsx"),
+  route("login", "routes/login.tsx", { id: "login-exact" }),
+  route("login/*", "routes/login.tsx", { id: "login-splat" }),
+  route("api/assets", "routes/api/assets.ts"),
   
   // クライアント用ルート
   layout("routes/client.tsx", [
