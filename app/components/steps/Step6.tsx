@@ -7,9 +7,10 @@ interface StepProps {
   onReset: () => void;
   onSubmit: () => Promise<void>;
   isSubmitting: boolean;
+  actionError?: string;
 }
 
-export function Step6({ data, onPrev, onReset, onSubmit, isSubmitting }: StepProps) {
+export function Step6({ data, onPrev, onReset, onSubmit, isSubmitting, actionError }: StepProps) {
   const [error, setError] = useState<string | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
@@ -24,27 +25,27 @@ export function Step6({ data, onPrev, onReset, onSubmit, isSubmitting }: StepPro
 
   return (
     <div className="step-fade-enter-active">
-      <h2 className="font-mincho" style={{ fontSize: '2.2rem', marginBottom: '1rem', color: 'var(--accent-color)', fontWeight: 600 }}>
+      <h2 className="font-mincho" style={{ fontSize: '1.6rem', marginBottom: '0.5rem', color: 'var(--accent-color)', fontWeight: 600 }}>
         ヒアリング完了
       </h2>
-      <p className="font-gothic" style={{ marginBottom: '1.5rem', opacity: 0.8, lineHeight: 1.8 }}>
+      <p className="font-gothic" style={{ marginBottom: '1rem', opacity: 0.8, lineHeight: 1.6, fontSize: '0.85rem' }}>
         ヒアリングへのご協力、誠にありがとうございました。<br/>
         以下の内容でご要望を承りました。
       </p>
       
-      <div style={{ padding: '1.5rem', background: 'rgba(184, 156, 109, 0.05)', borderRadius: '12px', borderLeft: '4px solid var(--accent-color)', marginBottom: '3rem' }}>
-        <p className="font-gothic" style={{ margin: 0, fontWeight: 500, color: 'var(--text-color)' }}>
+      <div style={{ padding: '1rem', background: 'rgba(184, 156, 109, 0.05)', borderRadius: '12px', borderLeft: '4px solid var(--accent-color)', marginBottom: '1.5rem' }}>
+        <p className="font-gothic" style={{ margin: 0, fontWeight: 500, color: 'var(--text-color)', fontSize: '0.9rem', lineHeight: 1.5 }}>
           次のステップ：オンラインでのお打ち合わせ（キックオフ）<br/>
-          <span style={{ fontSize: '0.9rem', opacity: 0.8, fontWeight: 400 }}>担当者より、ご入力いただいた内容を元に具体的なご提案をさせていただきます。</span>
+          <span style={{ fontSize: '0.8rem', opacity: 0.8, fontWeight: 400 }}>担当者より、ご入力いただいた内容を元に具体的なご提案をさせていただきます。</span>
         </p>
       </div>
 
-      <div style={{ marginBottom: '3rem' }}>
-        <h3 className="font-mincho" style={{ marginBottom: '1.5rem', borderBottom: '1px solid var(--neu-border)', paddingBottom: '0.5rem', fontSize: '1.3rem' }}>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h3 className="font-mincho" style={{ marginBottom: '1rem', borderBottom: '1px solid var(--neu-border)', paddingBottom: '0.4rem', fontSize: '1.1rem' }}>
           ご入力内容の確認
         </h3>
         
-        <dl className="font-gothic" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem 2rem', margin: 0, lineHeight: 1.8 }}>
+        <dl className="font-gothic" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0.6rem 1.5rem', margin: 0, lineHeight: 1.6, fontSize: '0.85rem' }}>
           <dt style={{ opacity: 0.7, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem' }}>会社名 / お名前</dt>
           <dd style={{ margin: 0, fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem' }}>{data.companyName || '未入力'}</dd>
 
@@ -62,17 +63,17 @@ export function Step6({ data, onPrev, onReset, onSubmit, isSubmitting }: StepPro
 
           <dt style={{ opacity: 0.7, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem' }}>デザインの方向性</dt>
           <dd style={{ margin: 0, fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem' }}>
-            {data.designKeywords.length > 0 ? data.designKeywords.join(' / ') : '未選択'}
+            {data.designKeywords && data.designKeywords.length > 0 ? data.designKeywords.join(' / ') : '未選択'}
           </dd>
 
           <dt style={{ opacity: 0.7, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem' }}>テーマカラー</dt>
           <dd style={{ margin: 0, fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem' }}>
-            {data.themeColors.length > 0 ? data.themeColors.join(' / ') : '未選択'}
+            {data.themeColors && data.themeColors.length > 0 ? data.themeColors.join(' / ') : '未選択'}
           </dd>
         </dl>
       </div>
 
-      {error && (
+      {(error || actionError) && (
         <div style={{ 
           padding: '1rem', 
           borderRadius: '12px', 
@@ -83,7 +84,7 @@ export function Step6({ data, onPrev, onReset, onSubmit, isSubmitting }: StepPro
           marginBottom: '2rem', 
           textAlign: 'center' 
         }}>
-          送信エラー: {error}
+          送信エラー: {error || actionError}
         </div>
       )}
 
@@ -93,8 +94,8 @@ export function Step6({ data, onPrev, onReset, onSubmit, isSubmitting }: StepPro
         alignItems: 'center', 
         justifyContent: 'center', 
         gap: '0.8rem', 
-        margin: '2rem 0', 
-        padding: '1rem', 
+        margin: '1.2rem 0', 
+        padding: '0.8rem', 
         background: 'rgba(255, 255, 255, 0.02)',
         borderRadius: '8px',
         border: '1px solid var(--neu-border)'
@@ -106,12 +107,12 @@ export function Step6({ data, onPrev, onReset, onSubmit, isSubmitting }: StepPro
           onChange={(e) => setTermsAccepted(e.target.checked)}
           style={{ width: '18px', height: '18px', cursor: 'pointer' }}
         />
-        <label htmlFor="final-consent" className="font-gothic" style={{ fontSize: '0.9rem', cursor: 'pointer', opacity: 0.9 }}>
+        <label htmlFor="final-consent" className="font-gothic" style={{ fontSize: '0.85rem', cursor: 'pointer', opacity: 0.9 }}>
           キャンセルポリシーおよびヒアリング提出規約に同意し、回答を最終提出します。
         </label>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center', marginTop: '1.5rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', marginTop: '1.2rem' }}>
         <button 
           type="button" 
           onClick={handleSubmit} 

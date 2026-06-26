@@ -34,10 +34,20 @@ export async function loader(args: Route.LoaderArgs) {
       LEFT JOIN hearings h ON p.id = h.project_id
     `).all();
 
-    const projects = (results || []).map((row: any) => ({
-      id: row.id,
-      title: row.title,
-      clientName: row.client_name,
+    const projects = (results || []).map((row: any) => {
+      let companyName = "";
+      if (row.overview_data) {
+        try {
+          const parsed = JSON.parse(row.overview_data);
+          companyName = parsed.companyName || "";
+        } catch (e) {}
+      }
+
+      return {
+        id: row.id,
+        title: row.title,
+        clientName: row.client_name,
+        companyName: companyName,
       userEmail: row.user_email,
       progressRate: row.progress_rate || 0,
       bookingLimit: row.booking_limit || 3,
@@ -46,14 +56,16 @@ export async function loader(args: Route.LoaderArgs) {
       hearingSubmitted: row.hearing_status === "submitted",
       overviewData: row.overview_data,
       contentData: row.content_data,
-    }));
+      };
+    });
 
     // Detect stagnant projects and dispatch Discord alerts
     const stagnantList = projects.filter((p: any) => isStagnant(p.lastActivityAt));
     if (stagnantList.length > 0) {
       const names = stagnantList.map((p: any) => p.clientName).join(", ");
       try {
-        await sendDiscordNotification({
+        const env = (context as any).cloudflare.env;
+        await sendDiscordNotification(env, {
           title: "停滞プロジェクト検知アラート",
           description: `最終活動から5営業日以上経過している案件があります。`,
           fields: [
@@ -264,7 +276,7 @@ export default function AdminDashboard() {
       {/* Header and Notifications bar */}
       <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 className="font-mincho" style={{ fontSize: '2rem', fontWeight: 600, color: 'var(--text-color)', margin: 0 }}>
+          <h2 className="font-mincho" style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-color)', margin: 0 }}>
             プロジェクト一覧
           </h2>
           <p className="font-gothic" style={{ opacity: 0.6, marginTop: '0.5rem' }}>全クライアントの進行状況を管理します。</p>
@@ -397,9 +409,11 @@ export default function AdminDashboard() {
                     }}
                   >
                     <td style={{ padding: '1.2rem' }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{project.clientName}</div>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                        {project.companyName ? project.companyName : project.clientName}
+                      </div>
                       <div style={{ opacity: 0.5, fontSize: '0.75rem', marginTop: '0.2rem' }}>
-                        Email: {project.userEmail}
+                        担当: {project.clientName} | Email: {project.userEmail}
                       </div>
                       {stagnant && (
                         <div style={{ color: '#dc3545', fontSize: '0.75rem', fontWeight: 'bold', marginTop: '0.3rem' }}>
@@ -510,7 +524,7 @@ export default function AdminDashboard() {
             padding: '2.5rem',
             position: 'relative',
           }}>
-            <h3 className="font-mincho" style={{ margin: '0 0 1.5rem 0', fontSize: '1.5rem', fontWeight: 600 }}>新規プロジェクト作成</h3>
+            <h3 className="font-mincho" style={{ margin: '0 0 1.5rem 0', fontSize: '1rem', fontWeight: 600 }}>新規プロジェクト作成</h3>
             
             <fetcher.Form method="post">
               <input type="hidden" name="intent" value="createProject" />

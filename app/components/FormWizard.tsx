@@ -12,10 +12,12 @@ import { useAuth } from '../contexts/AuthContext';
 
 export function FormWizard({ 
   initialData, 
-  initialTermsAccepted = false 
+  initialTermsAccepted = false,
+  actionError
 }: { 
   initialData?: FormData | null; 
   initialTermsAccepted?: boolean;
+  actionError?: string;
 }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<FormData>(initialFormData);
@@ -45,7 +47,7 @@ export function FormWizard({
       let dataLoaded = false;
       
       if (initialData) {
-        setFormData(initialData);
+        setFormData({ ...initialFormData, ...initialData });
         dataLoaded = true;
       }
 
@@ -53,7 +55,7 @@ export function FormWizard({
         const saved = localStorage.getItem('designBoardFormData');
         if (saved) {
           try {
-            setFormData(JSON.parse(saved));
+            setFormData({ ...initialFormData, ...JSON.parse(saved) });
           } catch (e) {
             console.error('Failed to parse saved form data');
           }
@@ -239,12 +241,42 @@ export function FormWizard({
           <div className="neumorphic-panel" style={{
             maxWidth: '600px',
             width: '100%',
-            padding: '2.5rem',
+            padding: '2rem 2.5rem 2.5rem 2.5rem',
             textAlign: 'center',
             maxHeight: '90vh',
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
+            position: 'relative'
           }}>
+            {/* 閉じるボタン（すでに同意済み、または初回でもモーダルを閉じたい場合） */}
+            {(termsAccepted || initialTermsAccepted) && (
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                style={{
+                  position: 'absolute',
+                  top: '1rem',
+                  right: '1rem',
+                  width: '32px',
+                  height: '32px',
+                  padding: 0,
+                  borderRadius: '50%',
+                  border: 'var(--neu-border)',
+                  background: 'transparent',
+                  color: 'var(--text-color)',
+                  fontSize: '1rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--shadow-out)',
+                  minWidth: 'auto',
+                  minHeight: 'auto'
+                }}
+              >
+                ✕
+              </button>
+            )}
             <h2 className="font-mincho" style={{ fontSize: '1.6rem', marginBottom: '1.5rem', color: 'var(--accent-color)' }}>
               デザインヒアリング開始にあたっての同意
             </h2>
@@ -320,11 +352,11 @@ export function FormWizard({
         </div>
       )}
 
-      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '1rem', display: 'grid', gridTemplateColumns: '260px 1fr', gap: '3rem', alignItems: 'start' }}>
+      <div style={{ width: '100%', padding: '0.5rem 0', display: 'grid', gridTemplateColumns: '180px 1fr', gap: '1.5rem', alignItems: 'start' }}>
         
         {/* 縦型の進捗ステップ (Vertical Stepper) */}
         <div style={{ position: 'sticky', top: '2rem' }}>
-          <h3 className="font-mincho" style={{ marginBottom: '2rem', fontSize: '1.2rem', paddingLeft: '0.5rem' }}>進捗ステップ</h3>
+          <h3 className="font-mincho" style={{ marginBottom: '1rem', fontSize: '1.1rem', paddingLeft: '0.5rem' }}>進捗ステップ</h3>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {stepsInfo.map((step, idx) => {
               const stepNum = idx + 1;
@@ -350,24 +382,24 @@ export function FormWizard({
                     {/* 線 */}
                     {stepNum !== TOTAL_STEPS && (
                       <div style={{ 
-                        width: '2px', flex: 1, minHeight: '40px',
+                        width: '2px', flex: 1, minHeight: '12px',
                         background: isCompleted ? 'var(--accent-color)' : 'var(--neu-border)',
                         opacity: isCompleted ? 0.3 : 0.5,
-                        margin: '0.4rem 0'
+                        margin: '0.1rem 0'
                       }} />
                     )}
                   </div>
                   {/* ステップのテキスト */}
-                  <div style={{ paddingBottom: '2.5rem', paddingTop: '0.4rem', cursor: isCompleted ? 'pointer' : 'default' }} onClick={() => isCompleted && setCurrentStep(stepNum)}>
+                  <div style={{ paddingBottom: '0.8rem', paddingTop: '0.2rem', cursor: isCompleted ? 'pointer' : 'default' }} onClick={() => isCompleted && setCurrentStep(stepNum)}>
                     <div className="font-gothic" style={{ 
                       fontWeight: isActive ? 600 : (isCompleted ? 500 : 400),
                       color: isActive ? 'var(--accent-color)' : (isCompleted ? 'var(--text-color)' : 'var(--text-muted)'),
-                      fontSize: '1rem',
+                      fontSize: '0.85rem',
                       letterSpacing: '0.05em'
                     }}>
                       {step.title}
                     </div>
-                    <div className="font-gothic" style={{ fontSize: '0.8rem', opacity: 0.5, marginTop: '0.3rem' }}>{step.desc}</div>
+                    <div className="font-gothic" style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.1rem' }}>{step.desc}</div>
                   </div>
                 </div>
               );
@@ -376,7 +408,7 @@ export function FormWizard({
         </div>
 
         {/* メインの入力パネル */}
-        <div className="neumorphic-panel" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div className="neumorphic-panel" style={{ padding: '1.5rem', minHeight: '50vh', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
             {currentStep === 1 && <Step1 data={formData} updateData={updateData} onNext={nextStep} />}
             {currentStep === 2 && <Step2 data={formData} updateData={updateData} onNext={nextStep} onPrev={prevStep} />}
@@ -390,6 +422,7 @@ export function FormWizard({
                 onReset={resetForm} 
                 onSubmit={handleSubmit} 
                 isSubmitting={isSubmitting} 
+                actionError={actionError}
               />
             )}
           </div>
@@ -435,24 +468,46 @@ export function FormWizard({
                 {autoSaveStatus === 'error' && '自動保存に失敗しました'}
                 {!autoSaveStatus && '入力内容は自動で下書き保存されます'}
               </div>
-              <button
-                type="button"
-                onClick={handleDraftSave}
-                disabled={isSubmitting}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid var(--accent-color)',
-                  color: 'var(--accent-color)',
-                  padding: '0.6rem 1.2rem',
-                  fontSize: '0.8rem',
-                  boxShadow: 'none',
-                  borderRadius: '8px',
-                  opacity: isSubmitting ? 0.6 : 1,
-                  cursor: isSubmitting ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {isSubmitting ? '保存中...' : '手動で一時保存'}
-              </button>
+              
+              <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--accent-color)',
+                    fontSize: '0.8rem',
+                    padding: 0,
+                    boxShadow: 'none',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    fontFamily: 'var(--font-gothic)',
+                    minWidth: 'auto',
+                    minHeight: 'auto'
+                  }}
+                >
+                  重要事項およびキャンセルポリシーを確認
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDraftSave}
+                  disabled={isSubmitting}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--accent-color)',
+                    color: 'var(--accent-color)',
+                    padding: '0.6rem 1.2rem',
+                    fontSize: '0.8rem',
+                    boxShadow: 'none',
+                    borderRadius: '8px',
+                    opacity: isSubmitting ? 0.6 : 1,
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isSubmitting ? '保存中...' : '手動で一時保存'}
+                </button>
+              </div>
             </div>
           )}
         </div>

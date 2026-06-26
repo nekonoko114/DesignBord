@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL,
+  name TEXT,
   role TEXT NOT NULL CHECK(role IN ('admin', 'client')),
   created_at INTEGER DEFAULT (strftime('%s', 'now'))
 );

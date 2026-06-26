@@ -18,7 +18,7 @@ export async function loader({ context, params }: Route.LoaderArgs) {
   }
 
   // 1. Load project basic info
-  const projectResult = await db.prepare("SELECT * FROM projects WHERE client_id = ?").bind(id).first();
+  const projectResult = await db.prepare("SELECT * FROM projects WHERE id = ?").bind(id).first();
   if (!projectResult) {
     throw new Response("Project Not Found", { status: 404 });
   }
@@ -76,7 +76,7 @@ export default function AdminProjectDetail() {
           {project.title}
         </h2>
         <p className="font-gothic" style={{ opacity: 0.6, marginTop: '0.5rem' }}>
-          クライアントID: {id} | 現在のフェーズ: {project.currentPhase} | 進捗率: {project.progressRate}%
+          プロジェクトID: {id} | 現在のフェーズ: {project.currentPhase} | 進捗率: {project.progressRate}%
         </p>
       </header>
 

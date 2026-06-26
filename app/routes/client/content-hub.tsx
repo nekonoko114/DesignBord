@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useLoaderData } from 'react-router';
+import { useLoaderData, useActionData, Link } from 'react-router';
 import type { Route } from './+types/content-hub';
 import { requireUserRole } from '../../utils/auth.server';
+import { sendDiscordNotification } from '../../utils/discord.server';
 
 export interface UploadedFile {
   id: string;
@@ -30,6 +31,7 @@ export async function loader(args: Route.LoaderArgs) {
     { id: '3', title: 'サービス案内', content: '' },
     { id: '4', title: 'お問い合わせ情報', content: '' }
   ];
+  let contentSubmitted = false;
 
   try {
     const project = await db.prepare("SELECT id FROM projects WHERE client_id = ?").bind(userId).first();
@@ -40,6 +42,7 @@ export async function loader(args: Route.LoaderArgs) {
         if (contentDataObj.sections && contentDataObj.sections.length > 0) {
           initialSections = contentDataObj.sections;
         }
+        contentSubmitted = Boolean(contentDataObj.submitted);
       }
     }
   } catch (e) {
@@ -47,32 +50,36 @@ export async function loader(args: Route.LoaderArgs) {
   }
 
   return {
-    initialSections
+    initialSections,
+    contentSubmitted
   };
 }
 
 export async function action(args: Route.ActionArgs) {
-  const { context, request } = args;
-  const { userId } = await requireUserRole(args, ["client"]);
-  const db = (context as any).cloudflare.env.DB;
-  const bucket = (context as any).cloudflare.env.BUCKET;
-
-  const formData = await request.formData();
-  const intent = formData.get("intent") as string;
-
+  console.log(`[ACTION START] intent processing started for ${args.request.url}`);
   try {
-    const project = await db.prepare("SELECT id FROM projects WHERE client_id = ?").bind(userId).first();
+    const { context, request } = args;
+    const { userId } = await requireUserRole(args, ["client"]);
+    console.log(`[ACTION] User ${userId} authorized.`);
+    const db = (context as any).cloudflare.env.DB;
+    const bucket = (context as any).cloudflare.env.BUCKET;
+
+    const formData = await request.formData();
+    const intent = formData.get("intent") as string;
+    console.log(`[ACTION] intent: ${intent}`);
+
+    const project = await db.prepare("SELECT id, title FROM projects WHERE client_id = ?").bind(userId).first();
     if (!project) {
-      return new Response(JSON.stringify({ error: "プロジェクトが見つかりません。" }), { status: 404 });
+      return new Response(JSON.stringify({ error: "プロジェクトが見つかりません。" }), { status: 404, headers: { "Content-Type": "application/json" } });
     }
 
     if (intent === "save-text") {
       const sectionsString = formData.get("sections") as string;
       if (!sectionsString) {
-        return new Response(JSON.stringify({ error: "原稿データがありません。" }), { status: 400 });
+        return new Response(JSON.stringify({ error: "原稿データがありません。" }), { status: 400, headers: { "Content-Type": "application/json" } });
       }
 
-      const hearing = await db.prepare("SELECT id, content_data FROM hearings WHERE project_id = ?").bind(project.id).first();
+      const hearing = await db.prepare("SELECT * FROM hearings WHERE project_id = ?").bind(project.id).first();
       const hearingId = hearing ? hearing.id : crypto.randomUUID();
       
       let contentDataObj: any = {};
@@ -94,7 +101,59 @@ export async function action(args: Route.ActionArgs) {
 
       await db.prepare("UPDATE projects SET last_activity_at = strftime('%s', 'now') WHERE id = ?").bind(project.id).run();
 
-      return new Response(JSON.stringify({ success: true }));
+      return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
+    }
+
+    if (intent === "submit-content") {
+      console.log(`[ACTION] intent === submit-content`);
+      const sectionsString = formData.get("sections") as string;
+      if (!sectionsString) {
+        console.log(`[ACTION] No sections data`);
+        return new Response(JSON.stringify({ error: "原稿データがありません。" }), { status: 400, headers: { "Content-Type": "application/json" } });
+      }
+
+      console.log(`[ACTION] Updating hearing data...`);
+      const hearing = await db.prepare("SELECT * FROM hearings WHERE project_id = ?").bind(project.id).first();
+      const hearingId = hearing ? hearing.id : crypto.randomUUID();
+      
+      const contentDataObj = {
+        sections: JSON.parse(sectionsString),
+        submitted: true
+      };
+
+      await db.prepare(
+        "INSERT OR REPLACE INTO hearings (id, project_id, status, overview_data, content_data, terms_accepted, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%s', 'now'))"
+      ).bind(
+        hearingId,
+        project.id,
+        hearing ? hearing.status : 'draft',
+        hearing ? hearing.overview_data : '{}',
+        JSON.stringify(contentDataObj),
+        hearing ? hearing.terms_accepted : 0
+      ).run();
+
+      await db.prepare("UPDATE projects SET last_activity_at = strftime('%s', 'now') WHERE id = ?").bind(project.id).run();
+
+      console.log(`[ACTION] Dispatching discord notification...`);
+      // Dispatch Discord webhook notification
+      const env = (context as any).cloudflare.env;
+      try {
+        await sendDiscordNotification(env, {
+          title: "📝 原稿提出のお知らせ",
+          description: `クライアント様より原稿が最終提出されました。`,
+          fields: [
+            { name: "プロジェクト名", value: project.title as string, inline: true },
+            { name: "提出セクション数", value: `${contentDataObj.sections.length}件`, inline: true }
+          ],
+          color: 3447003, // 青系
+        });
+        console.log(`[ACTION] Discord notification sent successfully.`);
+      } catch (err: any) {
+        console.error(`[ACTION] Discord notification failed:`, err);
+      }
+
+      console.log(`[ACTION] Returning success response`);
+      return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
     }
 
     if (intent === "upload-file") {
@@ -103,7 +162,7 @@ export async function action(args: Route.ActionArgs) {
       const sectionId = formData.get("sectionId") as string;
 
       if (!file) {
-        return new Response(JSON.stringify({ error: "ファイルがありません。" }), { status: 400 });
+        return new Response(JSON.stringify({ error: "ファイルがありません。" }), { status: 400, headers: { "Content-Type": "application/json" } });
       }
 
       const key = `projects/${project.id}/${fileId}_${file.name}`;
@@ -160,7 +219,7 @@ export async function action(args: Route.ActionArgs) {
           size: file.size,
           r2Key: key
         }
-      }));
+      }), { headers: { "Content-Type": "application/json" } });
     }
 
     if (intent === "delete-file") {
@@ -168,7 +227,7 @@ export async function action(args: Route.ActionArgs) {
       const sectionId = formData.get("sectionId") as string;
 
       if (!fileId) {
-        return new Response(JSON.stringify({ error: "ファイルIDがありません。" }), { status: 400 });
+        return new Response(JSON.stringify({ error: "ファイルIDがありません。" }), { status: 400, headers: { "Content-Type": "application/json" } });
       }
 
       const fileRecord = await db.prepare("SELECT * FROM files WHERE id = ?").bind(fileId).first();
@@ -210,18 +269,20 @@ export async function action(args: Route.ActionArgs) {
 
       await db.prepare("UPDATE projects SET last_activity_at = strftime('%s', 'now') WHERE id = ?").bind(project.id).run();
 
-      return new Response(JSON.stringify({ success: true }));
+      return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
     }
 
-    return new Response(JSON.stringify({ error: "無効なリクエストです。" }), { status: 400 });
-  } catch (e) {
-    console.error("Action handler error in content-hub:", e);
-    return new Response(JSON.stringify({ error: "サーバー処理中にエラーが発生しました。" }), { status: 500 });
+    return new Response(JSON.stringify({ error: "無効なリクエストです。" }), { status: 400, headers: { "Content-Type": "application/json" } });
+  } catch (e: any) {
+    console.error("Action error in content hub:", e);
+    return new Response(JSON.stringify({ error: e.message || "サーバー処理中にエラーが発生しました。" }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 }
 
 export default function ContentHub() {
-  const { initialSections } = useLoaderData<typeof loader>();
+  const { initialSections, contentSubmitted } = useLoaderData<typeof loader>();
+  const actionData = useActionData<{ success?: boolean }>();
+  
   const [sections, setSections] = useState<Section[]>(initialSections);
   const [activeSectionId, setActiveSectionId] = useState(initialSections[0]?.id || '1');
   const [isLoaded, setIsLoaded] = useState(true);
@@ -229,9 +290,12 @@ export default function ContentHub() {
   const [uploadingFiles, setUploadingFiles] = useState<{ [key: string]: number }>({});
   const [isDragging, setIsDragging] = useState(false);
 
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Auto-save debounced timer for textual changes
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || contentSubmitted) return;
 
     setSavingStatus('saving');
     const timer = setTimeout(async () => {
@@ -240,16 +304,26 @@ export default function ContentHub() {
         formData.append("intent", "save-text");
         formData.append("sections", JSON.stringify(sections));
 
-        const response = await fetch(window.location.pathname, {
+        const response = await fetch("/api/content-hub", {
           method: "POST",
           body: formData
         });
-        const result = await response.json();
-
-        if (result.success) {
-          setSavingStatus('saved');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+          const result = await response.json();
+          if (result.success) {
+            setSavingStatus('saved');
+          } else {
+            setSavingStatus('error');
+          }
         } else {
-          setSavingStatus('error');
+          console.error("Received non-JSON response:", await response.text());
+          throw new Error("サーバーから不正なレスポンスが返されました（JSONではありません）。");
         }
       } catch (e) {
         console.error('Auto-save error:', e);
@@ -258,7 +332,19 @@ export default function ContentHub() {
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [sections, isLoaded]);
+  }, [sections, isLoaded, contentSubmitted]);
+
+  // Action result listener
+  useEffect(() => {
+    if (actionData?.success) {
+      setIsEditing(false);
+    }
+  }, [actionData]);
+
+  // Reset isEditing state when contentSubmitted shifts
+  useEffect(() => {
+    setIsEditing(false);
+  }, [contentSubmitted]);
 
   const activeSection = sections.find(s => s.id === activeSectionId);
 
@@ -301,10 +387,18 @@ export default function ContentHub() {
       setUploadingFiles(prev => ({ ...prev, [fileId]: 50 }));
 
       try {
-        const response = await fetch(window.location.pathname, {
+        const response = await fetch("/api/content-hub", {
           method: "POST",
           body: uploadFormData
         });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const contentType = response.headers.get("content-type");
+        if (!contentType || contentType.indexOf("application/json") === -1) {
+          console.error("Received non-JSON response:", await response.text());
+          throw new Error("サーバーから不正なレスポンスが返されました。");
+        }
+
         const result = await response.json();
         
         if (result.success && result.file) {
@@ -363,10 +457,17 @@ export default function ContentHub() {
       deleteFormData.append("sectionId", activeSectionId);
       deleteFormData.append("fileId", fileId);
 
-      const response = await fetch(window.location.pathname, {
+      const response = await fetch("/api/content-hub", {
         method: "POST",
         body: deleteFormData
       });
+      
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const contentType = response.headers.get("content-type");
+      if (!contentType || contentType.indexOf("application/json") === -1) {
+        throw new Error("サーバーから不正なレスポンスが返されました。");
+      }
+      
       const result = await response.json();
 
       if (result.success) {
@@ -392,10 +493,17 @@ export default function ContentHub() {
       saveFormData.append("intent", "save-text");
       saveFormData.append("sections", JSON.stringify(sections));
 
-      const response = await fetch(window.location.pathname, {
+      const response = await fetch("/api/content-hub", {
         method: "POST",
         body: saveFormData
       });
+      
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const contentType = response.headers.get("content-type");
+      if (!contentType || contentType.indexOf("application/json") === -1) {
+        throw new Error("サーバーから不正なレスポンスが返されました。");
+      }
+      
       const result = await response.json();
 
       if (result.success) {
@@ -411,8 +519,119 @@ export default function ContentHub() {
     }
   };
 
+  const handleSubmitContent = async () => {
+    if (!confirm("原稿を最終提出してよろしいですか？（提出後もいつでも内容の確認や再編集が可能です）")) return;
+    setIsSubmitting(true);
+    try {
+      const submitFormData = new FormData();
+      submitFormData.append("intent", "submit-content");
+      submitFormData.append("sections", JSON.stringify(sections));
+
+      const response = await fetch("/api/content-hub", {
+        method: "POST",
+        body: submitFormData
+      });
+      
+      if (!response.ok) {
+        const text = await response.text();
+        console.error("Submit error text:", text);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const contentType = response.headers.get("content-type");
+      if (!contentType || contentType.indexOf("application/json") === -1) {
+        const text = await response.text();
+        console.error("Received non-JSON response:", text);
+        throw new Error("サーバーからHTMLが返されました（認証切れ等の可能性があります）。");
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setIsEditing(false);
+        // リロードしてデータを再検証
+        window.location.reload();
+      } else {
+        alert(`送信に失敗しました: ${result.error}`);
+      }
+    } catch (e) {
+      console.error("Submit content error:", e);
+      alert("提出処理中にエラーが発生しました。");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Render final submission completed panel
+  if (contentSubmitted && !isEditing) {
+    return (
+      <div style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '4rem' }}>
+        <header style={{ marginBottom: '3rem' }}>
+          <h2 className="font-mincho" style={{ fontSize: '2rem', fontWeight: 500, marginBottom: '0.8rem', color: 'var(--text-color)', letterSpacing: '0.05em' }}>
+            原稿ご提出
+          </h2>
+        </header>
+        <div className="neumorphic-panel" style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+          <h2 className="font-mincho" style={{ fontSize: '1.8rem', marginBottom: '1.5rem', color: 'var(--accent-color)' }}>
+            原稿ご提出完了
+          </h2>
+          <p className="font-gothic" style={{ opacity: 0.8, lineHeight: '1.8', marginBottom: '2.5rem' }}>
+            原稿のご提出ありがとうございました。<br />
+            ご提出いただいた内容を確認の上、制作スタッフがWebサイトの構築を進めさせていただきます。<br />
+            内容の確認や変更がある場合は、下記のボタンよりいつでも編集可能です。
+          </p>
+          <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link 
+              to="/client/dashboard" 
+              style={{ 
+                textDecoration: 'none',
+                background: 'var(--accent-color)',
+                color: 'var(--bg-color)',
+                padding: '0.8rem 2.2rem',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                fontFamily: 'var(--font-gothic)',
+                boxShadow: '0 4px 15px rgba(184, 156, 109, 0.25)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              ダッシュボードへ戻る
+            </Link>
+            <button 
+              onClick={() => setIsEditing(true)}
+              style={{ 
+                background: 'transparent',
+                border: '1px solid rgba(184, 156, 109, 0.4)',
+                color: 'var(--accent-color)',
+                padding: '0.8rem 2.2rem',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+                fontFamily: 'var(--font-gothic)',
+                cursor: 'pointer',
+                boxShadow: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.3s ease',
+                minWidth: 'auto',
+                minHeight: 'auto'
+              }}
+            >
+              提出した原稿を再編集する
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ width: '100%', maxWidth: '1600px', margin: '0 auto', paddingRight: '2rem' }}>
       <header style={{ marginBottom: '2rem' }}>
         <h2 className="font-mincho" style={{ fontSize: '1.8rem', fontWeight: 500, marginBottom: '0.6rem' }}>原稿ご提出ボード</h2>
         <p className="font-gothic" style={{ opacity: 0.7, letterSpacing: '0.05em', fontSize: '0.85rem', lineHeight: '1.5' }}>
@@ -503,12 +722,13 @@ export default function ContentHub() {
               onDrop={handleDrop}
               style={{ 
                 minHeight: '280px', 
+                width: '100%',
                 resize: 'vertical',
                 padding: '1rem',
                 border: isDragging ? '2px dashed var(--accent-color)' : '1px solid var(--neu-border)',
                 backgroundColor: isDragging ? 'rgba(184, 156, 109, 0.05)' : 'transparent',
                 transition: 'all 0.2s ease',
-                fontSize: '0.9rem',
+                fontSize: '0.95rem',
                 lineHeight: '1.6'
               }}
             />
@@ -619,26 +839,43 @@ export default function ContentHub() {
             </div>
           </div>
           
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.2rem' }}>
             <button 
               onClick={handleSaveImmediately}
               style={{ 
-                padding: '1rem 2.5rem', 
-                background: 'var(--bg-color)', 
+                padding: '0.8rem 2rem', 
+                background: 'transparent', 
+                border: '1px solid var(--neu-border)',
                 color: 'var(--text-color)',
+                borderRadius: '8px',
                 opacity: savingStatus === 'saving' ? 0.7 : 1,
                 cursor: savingStatus === 'saving' ? 'not-allowed' : 'pointer',
                 display: 'inline-flex',
-                alignItems: 'center'
+                alignItems: 'center',
+                fontSize: '0.85rem'
               }}
               disabled={savingStatus === 'saving'}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.5rem' }}>
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                <polyline points="7 3 7 8 15 8"></polyline>
-              </svg>
-              {savingStatus === 'saving' ? '保存中...' : '変更を保存する'}
+              下書き保存
+            </button>
+            <button 
+              onClick={handleSubmitContent}
+              disabled={isSubmitting}
+              style={{ 
+                padding: '0.8rem 2.5rem', 
+                background: 'var(--accent-color)', 
+                color: 'var(--bg-color)',
+                border: 'none',
+                borderRadius: '8px',
+                boxShadow: '0 4px 10px rgba(184, 156, 109, 0.25)',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                fontSize: '0.85rem',
+                fontWeight: 600
+              }}
+            >
+              {isSubmitting ? '提出中...' : '原稿を最終提出する'}
             </button>
           </div>
         </div>

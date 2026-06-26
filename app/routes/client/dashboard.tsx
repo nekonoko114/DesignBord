@@ -3,6 +3,7 @@ import { useNavigate, useLoaderData, useSubmit } from "react-router";
 import type { Route } from "./+types/dashboard";
 import { useAuth } from "../../contexts/AuthContext";
 import { requireUserRole } from "../../utils/auth.server";
+import { Check } from "lucide-react";
 
 export async function loader(args: Route.LoaderArgs) {
   const { context, request } = args;
@@ -95,6 +96,10 @@ export default function ClientDashboard() {
   const [scheduledAt, setScheduledAt] = useState("");
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // UI状態管理：タイムライン表示と予約フォーム表示
+  const [showTimeline, setShowTimeline] = useState(false);
+  const [showBookingForm, setShowBookingForm] = useState(false);
 
   if (!projectData) {
     return null;
@@ -140,6 +145,7 @@ export default function ClientDashboard() {
 
       if (result.success) {
         setScheduledAt("");
+        setShowBookingForm(false);
         submit(null, { method: "get" }); // Revalidate
       } else {
         setBookingError(result.error || "予約に失敗しました。");
@@ -165,39 +171,65 @@ export default function ClientDashboard() {
 
   const limit = project?.booking_limit || 3;
   const canBook = bookingCount < limit;
+  const hasTodo = !projectData.hearingSubmitted || !projectData.contentSubmitted;
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-      <header style={{ marginBottom: '4rem' }}>
-        <h2 className="font-mincho" style={{ fontSize: '2.5rem', fontWeight: 500, marginBottom: '1rem', color: 'var(--text-color)' }}>
+    <div style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '4rem' }}>
+      <header style={{ marginBottom: '3rem' }}>
+        <h2 className="font-mincho" style={{ fontSize: '2rem', fontWeight: 500, marginBottom: '0.8rem', color: 'var(--text-color)', letterSpacing: '0.05em' }}>
           ダッシュボード
         </h2>
-        <p className="font-gothic" style={{ opacity: 0.7, fontSize: '1rem', letterSpacing: '0.05em' }}>
-          プロジェクトの全体像と、現在のアクションをご確認いただけます。
+        <p className="font-gothic" style={{ opacity: 0.6, fontSize: '0.9rem', letterSpacing: '0.05em', margin: 0 }}>
+          プロジェクト「{project?.title || "Webサイト制作"}」の現状と次回のアクション
         </p>
       </header>
 
-      {/* 2-Column Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '3rem', alignItems: 'start' }}>
+      {/* 1-Column Content Container */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
         
-        {/* Left Column: Progress & Timeline */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
-          
-          <div className="neumorphic-panel">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3rem' }}>
-              <h3 className="font-mincho" style={{ fontSize: '1.4rem', fontWeight: 600, margin: 0 }}>
-                一目でわかる進行状況
-              </h3>
-              <span style={{ 
-                background: 'var(--bg-color)', color: 'var(--accent-color)', 
-                padding: '0.5rem 1.2rem', borderRadius: '50px', fontSize: '0.85rem', fontWeight: 600,
-                boxShadow: 'var(--shadow-out)', border: 'var(--neu-border)'
-              }}>
-                現在のフェーズ：{getPhaseName(projectData.currentPhase)}
+        {/* Section 1: Status & Timeline (Collapsible) */}
+        <div className="neumorphic-panel" style={{ padding: '1.8rem 2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ 
+                width: '12px', height: '12px', borderRadius: '50%', 
+                backgroundColor: 'var(--accent-color)', 
+                boxShadow: '0 0 10px var(--accent-glow)' 
+              }} />
+              <span className="font-gothic" style={{ fontSize: '0.95rem', fontWeight: 500 }}>
+                現在のフェーズ: <span className="font-mincho" style={{ color: 'var(--accent-color)', fontWeight: 600, marginLeft: '0.4rem', fontSize: '1.05rem' }}>{getPhaseName(projectData.currentPhase)}</span>
               </span>
             </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+            <button 
+              onClick={() => setShowTimeline(!showTimeline)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-color)',
+                opacity: 0.6,
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-gothic)',
+                padding: '0.2rem 0.5rem',
+                textDecoration: 'underline',
+                textUnderlineOffset: '4px'
+              }}
+            >
+              {showTimeline ? "進捗詳細を閉じる" : "全体の進捗工程を表示"}
+            </button>
+          </div>
+
+          {/* Collapsible Timeline */}
+          {showTimeline && (
+            <div style={{ 
+              marginTop: '2rem', 
+              paddingTop: '2rem', 
+              borderTop: '1px solid var(--neu-border)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.5rem',
+              animation: 'fadeIn 0.3s ease-out'
+            }}>
               <ProgressTimelineStep 
                 phase="Phase 1" 
                 title="ヒアリング・要件定義" 
@@ -230,196 +262,253 @@ export default function ClientDashboard() {
                 isLast
               />
             </div>
-          </div>
-
-          {/* Project Details */}
-          <div className="neumorphic-panel">
-            <h3 className="font-mincho" style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '2rem', margin: 0 }}>プロジェクト基本情報</h3>
-            <div className="font-gothic" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', opacity: 0.8, fontSize: '0.95rem' }}>
-              <div>
-                <div style={{ opacity: 0.6, fontSize: '0.8rem', marginBottom: '0.2rem' }}>ご契約プラン</div>
-                <div style={{ fontWeight: 500 }}>{projectData.planName}</div>
-              </div>
-              <div>
-                <div style={{ opacity: 0.6, fontSize: '0.8rem', marginBottom: '0.2rem' }}>公開予定日</div>
-                <div style={{ fontWeight: 500 }}>{projectData.launchDate}</div>
-              </div>
-              <div>
-                <div style={{ opacity: 0.6, fontSize: '0.8rem', marginBottom: '0.2rem' }}>サイト種別</div>
-                <div style={{ fontWeight: 500 }}>{projectData.siteType}</div>
-              </div>
-              <div>
-                <div style={{ opacity: 0.6, fontSize: '0.8rem', marginBottom: '0.2rem' }}>担当ディレクター</div>
-                <div style={{ fontWeight: 500 }}>{projectData.directorName}</div>
-              </div>
-            </div>
-          </div>
-
+          )}
         </div>
 
-        {/* Right Column: Actions & Bookings */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem', position: 'sticky', top: '2rem' }}>
-          
-          {/* Action Items */}
-          <div className="neumorphic-panel" style={{ position: 'relative', overflow: 'hidden', padding: '2rem' }}>
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '6px', background: 'var(--accent-color)' }} />
-            <h3 className="font-mincho" style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '2rem', margin: 0 }}>
-              ご対応お願い事項
-            </h3>
+        {/* Section 2: Action Needed (Todo) */}
+        <div className="neumorphic-panel" style={{ padding: '2rem', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: 'var(--accent-color)' }} />
+          <h3 className="font-mincho" style={{ fontSize: '1.2rem', fontWeight: 600, margin: '0 0 1.5rem 0', letterSpacing: '0.05em' }}>
+            ご対応お願い事項
+          </h3>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              
-              {/* Task 1: Hearing Sheet */}
-              <div style={{ 
-                padding: '1.5rem', 
-                borderRadius: '12px', 
-                background: 'var(--bg-color)',
-                boxShadow: projectData.hearingSubmitted ? 'var(--shadow-in)' : 'var(--shadow-out)',
-                border: projectData.hearingSubmitted ? 'var(--neu-border)' : '1px solid transparent',
-                opacity: projectData.hearingSubmitted ? 0.7 : 1,
-                transition: 'var(--transition-smooth)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <div className="font-mincho" style={{ 
-                    fontWeight: 600, 
-                    color: projectData.hearingSubmitted ? 'var(--text-muted)' : 'var(--accent-color)', 
-                    fontSize: '1.05rem' 
-                  }}>
-                    ヒアリングボード入力
-                  </div>
+            {/* Task 1: Hearing Board */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', 
+              padding: '1.2rem 1.5rem', 
+              borderRadius: '12px', 
+              background: 'var(--bg-color)',
+              boxShadow: projectData.hearingSubmitted ? 'var(--shadow-in)' : 'var(--shadow-out)',
+              border: projectData.hearingSubmitted ? 'var(--neu-border)' : '1px solid transparent',
+              opacity: projectData.hearingSubmitted ? 0.7 : 1,
+              flexWrap: 'wrap',
+              gap: '1rem'
+            }}>
+              <div style={{ flex: 1, minWidth: '250px' }}>
+                <div className="font-mincho" style={{ fontWeight: 600, color: projectData.hearingSubmitted ? 'var(--text-color)' : 'var(--accent-color)', fontSize: '1rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center' }}>
+                  ヒアリングボード入力
                   {projectData.hearingSubmitted && (
-                    <span style={{ fontSize: '0.8rem', color: 'var(--accent-color)', fontWeight: 600 }}>提出済</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.75rem', color: 'var(--accent-color)', marginLeft: '0.8rem', fontWeight: 600 }}>
+                      <Check size={14} /> 提出済
+                    </span>
                   )}
                 </div>
-                <p className="font-gothic" style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '1.5rem', lineHeight: 1.6 }}>
-                  {projectData.hearingSubmitted 
-                    ? "ご回答ありがとうございました。入力内容の確認・変更が可能です。" 
-                    : "プロジェクトの目的やデザインのご希望をお伺いします。"}
+                <p className="font-gothic" style={{ fontSize: '0.8rem', opacity: 0.7, margin: 0, lineHeight: 1.5 }}>
+                  プロジェクトの目的やデザインのご希望をお伺いします。
                 </p>
-                <button 
-                  onClick={() => navigate('/client/discovery')}
-                  style={{ 
-                    padding: '0.8rem 1.2rem', 
-                    fontSize: '0.85rem', 
-                    width: '100%', 
-                    borderRadius: '8px', 
-                    border: projectData.hearingSubmitted ? '1px solid var(--neu-border)' : 'none', 
-                    background: projectData.hearingSubmitted ? 'transparent' : 'var(--accent-color)', 
-                    color: projectData.hearingSubmitted ? 'var(--text-color)' : 'var(--bg-color)', 
-                    boxShadow: projectData.hearingSubmitted ? 'none' : '0 4px 10px rgba(184, 156, 109, 0.3)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {projectData.hearingSubmitted ? "回答内容を確認・修正" : "ヒアリングボードへ"}
-                </button>
               </div>
-
-              {/* Task 2: Content Hub */}
-              <div style={{ 
-                padding: '1.5rem', 
-                borderRadius: '12px', 
-                background: 'var(--bg-color)',
-                boxShadow: projectData.contentSubmitted ? 'var(--shadow-in)' : 'var(--shadow-out)',
-                border: projectData.contentSubmitted ? 'var(--neu-border)' : '1px dashed var(--neu-border)',
-                opacity: projectData.contentSubmitted ? 0.7 : 1,
-                transition: 'var(--transition-smooth)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <div className="font-mincho" style={{ 
-                    fontWeight: 600, 
-                    color: projectData.contentSubmitted ? 'var(--text-muted)' : 'var(--text-color)', 
-                    fontSize: '1.05rem',
-                    opacity: projectData.contentSubmitted ? 0.7 : 1
-                  }}>
-                    原稿のご提出
-                  </div>
-                  {projectData.contentSubmitted && (
-                    <span style={{ fontSize: '0.8rem', color: 'var(--accent-color)', fontWeight: 600 }}>提出済</span>
-                  )}
-                </div>
-                <p className="font-gothic" style={{ fontSize: '0.85rem', opacity: 0.5, marginBottom: '1.5rem', lineHeight: 1.6 }}>
-                  {projectData.contentSubmitted 
-                    ? "原稿をご提出いただきありがとうございます。追加や編集も可能です。"
-                    : "会社概要および代表挨拶のテキストのご準備をお願いいたします。"}
-                </p>
-                <button 
-                  onClick={() => navigate('/client/content-hub')}
-                  style={{ 
-                    padding: '0.8rem 1.2rem', 
-                    fontSize: '0.85rem', 
-                    width: '100%', 
-                    borderRadius: '8px', 
-                    border: projectData.contentSubmitted ? '1px solid var(--neu-border)' : 'none',
-                    background: projectData.contentSubmitted ? 'transparent' : 'var(--accent-color)',
-                    color: projectData.contentSubmitted ? 'var(--text-color)' : 'var(--bg-color)',
-                    boxShadow: projectData.contentSubmitted ? 'none' : '0 4px 10px rgba(184, 156, 109, 0.3)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {projectData.contentSubmitted ? "確認・修正する" : "原稿提出ボードへ"}
-                </button>
-              </div>
-
+              <button 
+                onClick={() => navigate('/client/discovery')}
+                style={{ 
+                  padding: '0.6rem 1.5rem', 
+                  fontSize: '0.8rem', 
+                  borderRadius: '8px', 
+                  border: projectData.hearingSubmitted ? '1px solid var(--accent-color)' : 'none', 
+                  background: projectData.hearingSubmitted ? 'transparent' : 'var(--accent-color)', 
+                  color: projectData.hearingSubmitted ? 'var(--accent-color)' : 'var(--bg-color)', 
+                  boxShadow: projectData.hearingSubmitted ? 'none' : '0 4px 10px rgba(184, 156, 109, 0.25)',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  minHeight: 'auto',
+                  minWidth: 'auto'
+                }}
+              >
+                {projectData.hearingSubmitted ? '回答内容を確認・修正' : '入力画面へ'}
+              </button>
             </div>
+
+            {/* Task 2: Content Hub */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', 
+              padding: '1.2rem 1.5rem', 
+              borderRadius: '12px', 
+              background: 'var(--bg-color)',
+              boxShadow: projectData.contentSubmitted ? 'var(--shadow-in)' : 'var(--shadow-out)',
+              border: projectData.contentSubmitted ? 'var(--neu-border)' : '1px solid transparent',
+              opacity: projectData.contentSubmitted ? 0.7 : 1,
+              flexWrap: 'wrap',
+              gap: '1rem'
+            }}>
+              <div style={{ flex: 1, minWidth: '250px' }}>
+                <div className="font-mincho" style={{ fontWeight: 600, color: 'var(--text-color)', fontSize: '1rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center' }}>
+                  原稿のご提出
+                  {projectData.contentSubmitted && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.75rem', color: 'var(--accent-color)', marginLeft: '0.8rem', fontWeight: 600 }}>
+                      <Check size={14} /> 提出済
+                    </span>
+                  )}
+                </div>
+                <p className="font-gothic" style={{ fontSize: '0.8rem', opacity: 0.7, margin: 0, lineHeight: 1.5 }}>
+                  会社概要および代表挨拶のテキストのご準備をお願いいたします。
+                </p>
+              </div>
+              <button 
+                onClick={() => navigate('/client/content-hub')}
+                style={{ 
+                  padding: '0.6rem 1.5rem', 
+                  fontSize: '0.8rem', 
+                  borderRadius: '8px', 
+                  border: projectData.contentSubmitted ? '1px solid var(--accent-color)' : 'none',
+                  background: projectData.contentSubmitted ? 'transparent' : 'var(--accent-color)',
+                  color: projectData.contentSubmitted ? 'var(--accent-color)' : 'var(--bg-color)',
+                  boxShadow: projectData.contentSubmitted ? 'none' : '0 4px 10px rgba(184, 156, 109, 0.25)',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  minHeight: 'auto',
+                  minWidth: 'auto'
+                }}
+              >
+                {projectData.contentSubmitted ? '提出原稿を確認・追加' : '提出画面へ'}
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Section 3: Next Meeting Reservation */}
+        <div className="neumorphic-panel" style={{ padding: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <h3 className="font-mincho" style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>
+              次回のお打ち合わせ
+            </h3>
+            {canBook && !showBookingForm && (
+              <button 
+                onClick={() => setShowBookingForm(true)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--accent-color)',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-gothic)',
+                  padding: '0.2rem 0.5rem',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '4px',
+                  fontWeight: 500
+                }}
+              >
+                新規お打合せ予約をする
+              </button>
+            )}
           </div>
 
-          {/* Next Meeting / Bookings Scheduler */}
-          <div className="neumorphic-panel" style={{ padding: '2rem' }}>
-            <h3 className="font-mincho" style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1.5rem', margin: 0 }}>
-              次回のお打ち合わせ予約
-            </h3>
-
-            {/* List of current active reservations */}
-            {bookings.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
-                {bookings.map((booking) => (
-                  <div key={booking.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem 0' }}>
-                    <div style={{ 
-                      width: '48px', height: '48px', borderRadius: '12px', 
-                      background: 'var(--bg-color)', boxShadow: 'var(--shadow-in)',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--accent-color)', fontWeight: 600 }}>予約済</span>
-                      <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>MTG</span>
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>打合せ（オンライン）</div>
-                      <div style={{ fontSize: '0.8rem', opacity: 0.6, marginTop: '0.2rem' }}>
-                        {formatDate(booking.scheduled_at)}
-                      </div>
+          {/* List of current active reservations */}
+          {bookings.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: showBookingForm ? '1.5rem' : 0 }}>
+              {bookings.map((booking) => (
+                <div key={booking.id} style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '1.2rem', 
+                  padding: '1rem',
+                  background: 'var(--bg-color)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--neu-border)'
+                }}>
+                  <div style={{ 
+                    width: '40px', height: '40px', borderRadius: '8px', 
+                    background: 'var(--bg-color)', boxShadow: 'var(--shadow-in)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent-color)' }}>MTG</span>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>打合せ（オンライン）</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.6, marginTop: '0.1rem' }}>
+                      {formatDate(booking.scheduled_at)}
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="font-gothic" style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: '1.5rem' }}>
-                現在、予約されているお打ち合わせはありません。
+                </div>
+              ))}
+            </div>
+          ) : (
+            !showBookingForm && (
+              <p className="font-gothic" style={{ fontSize: '0.85rem', opacity: 0.6, margin: 0 }}>
+                現在、確定しているお打ち合わせ予定はありません。
               </p>
-            )}
+            )
+          )}
 
-            {/* Reservation form within limits */}
-            {canBook ? (
+          {/* Collapsible Reservation Form */}
+          {showBookingForm && (
+            <div style={{ 
+              marginTop: '1.5rem', 
+              paddingTop: '1.5rem', 
+              borderTop: '1px solid var(--neu-border)',
+              animation: 'fadeIn 0.3s ease-out'
+            }}>
               <form onSubmit={handleBookingSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <label htmlFor="booking-time" className="font-gothic" style={{ fontSize: '0.8rem', opacity: 0.8 }}>
-                    希望日時を選択（予約枠 {bookingCount} / {limit}）
+                    希望日時を選択（現在の予約枠 {bookingCount} / {limit}）
                   </label>
-                  <input 
-                    type="datetime-local" 
-                    id="booking-time"
-                    value={scheduledAt}
-                    onChange={(e) => setScheduledAt(e.target.value)}
-                    required
-                    style={{
-                      padding: '0.8rem',
-                      background: 'var(--neu-bg-inset)',
-                      border: '1px solid var(--neu-border)',
-                      borderRadius: '8px',
-                      color: 'var(--text-color)',
-                      fontFamily: 'var(--font-gothic)',
-                      fontSize: '0.9rem'
-                    }}
-                  />
+                  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                    <input 
+                      type="datetime-local" 
+                      id="booking-time"
+                      value={scheduledAt}
+                      onChange={(e) => setScheduledAt(e.target.value)}
+                      required
+                      style={{
+                        padding: '0.8rem',
+                        background: 'var(--neu-bg-inset)',
+                        border: '1px solid var(--neu-border)',
+                        borderRadius: '8px',
+                        color: 'var(--text-color)',
+                        fontFamily: 'var(--font-gothic)',
+                        fontSize: '0.9rem',
+                        flex: 1,
+                        minWidth: '200px'
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button 
+                        type="submit" 
+                        disabled={isSubmitting || !scheduledAt}
+                        style={{ 
+                          padding: '0.8rem 1.5rem', 
+                          fontSize: '0.85rem', 
+                          background: 'var(--accent-color)', 
+                          color: 'var(--bg-color)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          opacity: (isSubmitting || !scheduledAt) ? 0.6 : 1,
+                          cursor: (isSubmitting || !scheduledAt) ? 'not-allowed' : 'pointer',
+                          fontWeight: 600,
+                          minHeight: 'auto',
+                          minWidth: 'auto'
+                        }}
+                      >
+                        {isSubmitting ? '予約中...' : '予約を確定'}
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setShowBookingForm(false);
+                          setBookingError(null);
+                        }}
+                        style={{ 
+                          padding: '0.8rem 1.2rem', 
+                          fontSize: '0.85rem', 
+                          background: 'transparent', 
+                          color: 'var(--text-color)',
+                          border: '1px solid var(--neu-border)',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          minHeight: 'auto',
+                          minWidth: 'auto'
+                        }}
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 
                 {bookingError && (
@@ -427,35 +516,50 @@ export default function ClientDashboard() {
                     {bookingError}
                   </p>
                 )}
-
-                <button 
-                  type="submit" 
-                  disabled={isSubmitting || !scheduledAt}
-                  style={{ 
-                    width: '100%', 
-                    padding: '0.8rem', 
-                    fontSize: '0.85rem', 
-                    background: 'var(--accent-color)', 
-                    color: 'var(--bg-color)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    opacity: (isSubmitting || !scheduledAt) ? 0.6 : 1,
-                    cursor: (isSubmitting || !scheduledAt) ? 'not-allowed' : 'pointer',
-                    fontWeight: 600
-                  }}
-                >
-                  {isSubmitting ? '処理中...' : '新規予約をする'}
-                </button>
               </form>
-            ) : (
-              <p className="font-gothic" style={{ fontSize: '0.8rem', color: 'var(--accent-color)', background: 'rgba(184, 156, 109, 0.05)', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(184, 156, 109, 0.2)', margin: 0 }}>
-                予約枠の上限（{limit}回）に達しました。追加の面談をご希望の場合は、ディレクターにお問い合わせください。
-              </p>
-            )}
-          </div>
-
+            </div>
+          )}
         </div>
+
+        {/* Section 4: Project Information (Footer style) */}
+        <div style={{ 
+          marginTop: '1.5rem',
+          paddingTop: '1.5rem', 
+          borderTop: '1px solid var(--neu-border)',
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          gap: '2rem', 
+          fontSize: '0.8rem', 
+          fontFamily: 'var(--font-gothic)', 
+          opacity: 0.6 
+        }}>
+          <div>
+            <span style={{ marginRight: '0.4rem' }}>プラン:</span>
+            <span style={{ fontWeight: 500, color: 'var(--text-color)' }}>{projectData.planName}</span>
+          </div>
+          <div>
+            <span style={{ marginRight: '0.4rem' }}>公開予定日:</span>
+            <span style={{ fontWeight: 500, color: 'var(--text-color)' }}>{projectData.launchDate}</span>
+          </div>
+          <div>
+            <span style={{ marginRight: '0.4rem' }}>サイト種別:</span>
+            <span style={{ fontWeight: 500, color: 'var(--text-color)' }}>{projectData.siteType}</span>
+          </div>
+          <div>
+            <span style={{ marginRight: '0.4rem' }}>担当ディレクター:</span>
+            <span style={{ fontWeight: 500, color: 'var(--text-color)' }}>{projectData.directorName}</span>
+          </div>
+        </div>
+
       </div>
+
+      {/* Custom Styles for Animation */}
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -468,41 +572,41 @@ function ProgressTimelineStep({ phase, title, desc, status, isLast = false }: { 
     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'stretch' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ 
-          width: '36px', height: '36px', borderRadius: '50%', 
+          width: '32px', height: '32px', borderRadius: '50%', 
           background: isActive ? 'var(--accent-color)' : (isCompleted ? 'var(--bg-color)' : 'transparent'),
-          boxShadow: isActive ? '0 0 15px var(--accent-glow)' : (isCompleted ? 'var(--shadow-in)' : 'none'),
+          boxShadow: isActive ? '0 0 10px var(--accent-glow)' : (isCompleted ? 'var(--shadow-in)' : 'none'),
           border: isActive ? 'none' : (isCompleted ? '1px solid rgba(184, 156, 109, 0.4)' : '1px solid var(--neu-border)'),
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: isActive ? 'var(--bg-color)' : (isCompleted ? 'var(--accent-color)' : 'var(--text-muted)'),
-          fontWeight: 600, fontSize: '1rem', zIndex: 2
+          fontWeight: 600, fontSize: '0.9rem', zIndex: 2
         }}>
           {isCompleted ? '✓' : ''}
-          {isActive && <span style={{ width: '10px', height: '10px', background: 'var(--bg-color)', borderRadius: '50%' }} />}
-          {status === 'upcoming' && <span style={{ width: '8px', height: '8px', background: 'var(--neu-border)', borderRadius: '50%' }} />}
+          {isActive && <span style={{ width: '8px', height: '8px', background: 'var(--bg-color)', borderRadius: '50%' }} />}
+          {status === 'upcoming' && <span style={{ width: '6px', height: '6px', background: 'var(--neu-border)', borderRadius: '50%' }} />}
         </div>
         {!isLast && (
           <div style={{ 
-            width: '2px', flex: 1, minHeight: '50px',
+            width: '2px', flex: 1, minHeight: '40px',
             background: isCompleted ? 'var(--accent-color)' : 'var(--neu-border)',
             opacity: isCompleted ? 0.3 : 0.5,
-            margin: '0.4rem 0'
+            margin: '0.3rem 0'
           }} />
         )}
       </div>
-      <div style={{ paddingBottom: isLast ? '0' : '2.5rem', paddingTop: '0.3rem' }}>
-        <div className="font-gothic" style={{ fontSize: '0.8rem', color: 'var(--accent-color)', fontWeight: 600, marginBottom: '0.2rem', opacity: isActive || isCompleted ? 1 : 0.5 }}>
+      <div style={{ paddingBottom: isLast ? '0' : '1.8rem', paddingTop: '0.2rem' }}>
+        <div className="font-gothic" style={{ fontSize: '0.75rem', color: 'var(--accent-color)', fontWeight: 600, marginBottom: '0.1rem', opacity: isActive || isCompleted ? 1 : 0.5 }}>
           {phase}
         </div>
         <div className="font-gothic" style={{ 
           fontWeight: isActive ? 600 : (isCompleted ? 500 : 400),
           color: isActive ? 'var(--accent-color)' : (isCompleted ? 'var(--text-color)' : 'var(--text-muted)'),
-          fontSize: '1.1rem',
+          fontSize: '1rem',
           letterSpacing: '0.05em',
-          marginBottom: '0.3rem'
+          marginBottom: '0.2rem'
         }}>
           {title}
         </div>
-        <div className="font-gothic" style={{ fontSize: '0.85rem', opacity: isActive ? 0.8 : 0.5 }}>
+        <div className="font-gothic" style={{ fontSize: '0.8rem', opacity: isActive ? 0.8 : 0.5 }}>
           {desc}
         </div>
       </div>

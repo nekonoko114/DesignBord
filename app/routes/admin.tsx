@@ -5,6 +5,7 @@ import { CustomCursor } from "../components/CustomCursor";
 import { requireUserRole } from "../utils/auth.server";
 import { useClerk, useUser } from "@clerk/react-router";
 import type { Route } from "./+types/admin";
+import { Folder } from "lucide-react";
 
 export async function loader(args: Route.LoaderArgs) {
   await requireUserRole(args, ["admin"]);
@@ -71,7 +72,7 @@ function AdminLayoutContent() {
         </div>
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1 }}>
-          <AdminNavItem to="/admin/dashboard" label="プロジェクト一覧" icon="📁" isOpen={isSidebarOpen} />
+          <AdminNavItem to="/admin/dashboard" label="プロジェクト一覧" icon={<Folder size={20} />} isOpen={isSidebarOpen} />
         </nav>
 
         <div style={{ marginTop: 'auto', paddingTop: '2rem', borderTop: '1px solid rgba(0,0,0,0.05)', display: 'flex', justifyContent: isSidebarOpen ? 'flex-start' : 'center', overflow: 'hidden' }}>
@@ -104,7 +105,7 @@ function AdminLayoutContent() {
   );
 }
 
-function AdminNavItem({ to, label, icon, isOpen }: { to: string; label: string; icon: string; isOpen: boolean }) {
+function AdminNavItem({ to, label, icon, isOpen }: { to: string; label: string; icon: React.ReactNode; isOpen: boolean }) {
   return (
     <NavLink 
       to={to}
@@ -131,7 +132,7 @@ function AdminNavItem({ to, label, icon, isOpen }: { to: string; label: string; 
     >
       {({ isActive }) => (
         <>
-          <span style={{ fontSize: '1.2rem', opacity: isActive ? 1 : 0.7 }}>{icon}</span>
+          <span style={{ display: 'flex', alignItems: 'center', opacity: isActive ? 1 : 0.7 }}>{icon}</span>
           {isOpen && <span style={{ opacity: isActive ? 1 : 0.8 }}>{label}</span>}
         </>
       )}

@@ -1,7 +1,15 @@
 .DS_Store
 .env
+.dev.vars
 /node_modules/
 
 # React Router
 /.react-router/
 /build/
+
+# Wrangler local state (SQLite, R2, etc.)
+/.wrangler/state/
+
+# Temporary scripts
+backfill_emails.ts
+get_emails.ts

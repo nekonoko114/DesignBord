@@ -15,13 +15,13 @@ export function Step3({ data, updateData, onNext, onPrev }: StepProps) {
 
   return (
     <div className="step-fade-enter-active">
-      <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem', color: 'var(--accent-color)' }}>
+      <h2 style={{ fontSize: '1.4rem', marginBottom: '0.4rem', color: 'var(--accent-color)' }}>
         03. Brand & Tone
       </h2>
-      <p style={{ marginBottom: '2rem', opacity: 0.8 }}>ブランドの性格や、ターゲットユーザーに対する印象を設定します。</p>
+      <p style={{ marginBottom: '1.2rem', opacity: 0.8, fontSize: '0.85rem' }}>ブランドの性格や、ターゲットユーザーに対する印象を設定します。</p>
 
       <form onSubmit={handleSubmit} className="asymmetry-container">
-        <div className="glass-panel" style={{ transform: 'translateY(1rem)' }}>
+        <div className="glass-panel">
           <div className="form-group">
             <label htmlFor="targetAudience">ターゲット層</label>
             <textarea
@@ -70,7 +70,7 @@ export function Step3({ data, updateData, onNext, onPrev }: StepProps) {
           </div>
         </div>
 
-        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', marginTop: '2rem' }}>
+        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', marginTop: '1.2rem' }}>
           <button type="button" onClick={onPrev} style={{ background: 'transparent', border: '2px solid var(--glass-border)', color: 'var(--text-color)' }}>
             <span style={{ marginRight: '0.5rem' }}>←</span> Back
           </button>

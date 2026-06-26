@@ -14,10 +14,10 @@ export function Step1({ data, updateData, onNext }: StepProps) {
 
   return (
     <div className="step-fade-enter-active">
-      <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem', color: 'var(--accent-color)' }}>
+      <h2 style={{ fontSize: '1.4rem', marginBottom: '0.4rem', color: 'var(--accent-color)' }}>
         01. Foundation
       </h2>
-      <p style={{ marginBottom: '2rem', opacity: 0.8 }}>まずは基本情報とインフラ環境について教えてください。</p>
+      <p style={{ marginBottom: '1.2rem', opacity: 0.8, fontSize: '0.85rem' }}>まずは基本情報とインフラ環境について教えてください。</p>
 
       <form onSubmit={handleSubmit} className="asymmetry-container">
         <div className="glass-panel">
@@ -119,7 +119,7 @@ export function Step1({ data, updateData, onNext }: StepProps) {
           )}
         </div>
 
-        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '2rem' }}>
+        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
           <button type="submit">
             Next Step <span style={{ marginLeft: '0.5rem' }}>→</span>
           </button>

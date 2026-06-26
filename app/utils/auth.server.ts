@@ -7,6 +7,9 @@ export async function requireUserRole(args: any, allowedRoles: ("admin" | "clien
   const auth = await getAuth(args);
   const request = args.request;
   
+  console.log(`[DEBUG] requireUserRole called for ${request.method} ${request.url}`);
+  console.log(`[DEBUG] auth.userId: ${auth?.userId}`);
+  
   if (!auth || !auth.userId) {
     const redirectTo = new URL(request.url).pathname;
     const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);

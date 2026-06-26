@@ -113,7 +113,8 @@ export async function action(args: Route.ActionArgs) {
       await db.prepare("UPDATE projects SET last_activity_at = strftime('%s', 'now') WHERE id = ?").bind(project.id).run();
 
       // Dispatch Discord notification
-      await sendDiscordNotification({
+      const env = (context as any).cloudflare.env;
+      await sendDiscordNotification(env, {
         title: "コメント追加のお知らせ",
         description: `クライアント様がデザインにフィードバック（アノテーション）を追加しました。`,
         fields: [

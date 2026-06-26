@@ -5,9 +5,11 @@ export default [
   route("login", "routes/login.tsx", { id: "login-exact" }),
   route("login/*", "routes/login.tsx", { id: "login-splat" }),
   route("api/assets", "routes/api/assets.ts"),
+  route("api/content-hub", "routes/api/content-hub.ts"),
   
   // クライアント用ルート
   layout("routes/client.tsx", [
+    index("routes/client/index.tsx"),
     route("client/dashboard", "routes/client/dashboard.tsx"),
     route("client/discovery", "routes/client/discovery.tsx"),
     route("client/content-hub", "routes/client/content-hub.tsx"),

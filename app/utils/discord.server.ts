@@ -1,10 +1,13 @@
-export async function sendDiscordNotification(payload: {
-  title: string;
-  description: string;
-  fields?: { name: string; value: string; inline?: boolean }[];
-  color?: number;
-}) {
-  const url = process.env.DISCORD_WEBHOOK_URL;
+export async function sendDiscordNotification(
+  env: { DISCORD_WEBHOOK_URL?: string },
+  payload: {
+    title: string;
+    description: string;
+    fields?: { name: string; value: string; inline?: boolean }[];
+    color?: number;
+  }
+) {
+  const url = env.DISCORD_WEBHOOK_URL;
   if (!url) {
     console.warn("DISCORD_WEBHOOK_URL is not defined in environment variables.");
     return;

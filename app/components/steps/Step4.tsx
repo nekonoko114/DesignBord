@@ -53,14 +53,14 @@ export function Step4({ data, updateData, onNext, onPrev }: StepProps) {
 
   return (
     <div className="step-fade-enter-active">
-      <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem', color: 'var(--accent-color)' }}>
+      <h2 style={{ fontSize: '1.4rem', marginBottom: '0.4rem', color: 'var(--accent-color)' }}>
         04. Visual & Aesthetics
       </h2>
-      <p style={{ marginBottom: '2rem', opacity: 0.8 }}>デザインの方向性やテーマカラーを選択してください。</p>
+      <p style={{ marginBottom: '1.2rem', opacity: 0.8, fontSize: '0.85rem' }}>デザインの方向性やテーマカラーを選択してください。</p>
 
       <form onSubmit={handleSubmit}>
-        <div className="glass-panel" style={{ marginBottom: '2rem' }}>
-          <label style={{ marginBottom: '1rem', display: 'block' }}>デザインイメージ（複数選択可）</label>
+        <div className="glass-panel" style={{ marginBottom: '1.2rem' }}>
+          <label style={{ marginBottom: '0.6rem', display: 'block', fontSize: '0.9rem', fontWeight: 600 }}>デザインイメージ（複数選択可）</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
             {DESIGN_KEYWORDS.map(keyword => (
               <button
@@ -82,9 +82,9 @@ export function Step4({ data, updateData, onNext, onPrev }: StepProps) {
           </div>
         </div>
 
-        <div className="glass-panel" style={{ marginBottom: '2rem' }}>
-          <label style={{ marginBottom: '1rem', display: 'block' }}>テーマカラー（複数選択可）</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+        <div className="glass-panel" style={{ marginBottom: '1.2rem' }}>
+          <label style={{ marginBottom: '0.6rem', display: 'block', fontSize: '0.9rem', fontWeight: 600 }}>テーマカラー（複数選択可）</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem' }}>
             {THEME_COLORS.map(({ label, color }) => (
               <div
                 key={label}
@@ -101,7 +101,7 @@ export function Step4({ data, updateData, onNext, onPrev }: StepProps) {
                 }}
               >
                 <div style={{
-                  width: '48px', height: '48px', borderRadius: '50%', background: color,
+                  width: '36px', height: '36px', borderRadius: '50%', background: color,
                   border: data.themeColors.includes(label) ? '3px solid #fff' : 'none',
                   boxShadow: data.themeColors.includes(label) ? `0 0 15px ${color}` : 'none'
                 }} />
@@ -124,7 +124,7 @@ export function Step4({ data, updateData, onNext, onPrev }: StepProps) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.2rem' }}>
           <button type="button" onClick={onPrev} style={{ background: 'transparent', border: '2px solid var(--glass-border)', color: 'var(--text-color)' }}>
             <span style={{ marginRight: '0.5rem' }}>←</span> Back
           </button>

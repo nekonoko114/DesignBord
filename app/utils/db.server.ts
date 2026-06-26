@@ -21,12 +21,12 @@ export async function seedDatabase(db: any) {
       await db.batch([
         // 初期ユーザー作成
         db.prepare(
-          "INSERT INTO users (id, email, role) VALUES (?, ?, ?)"
-        ).bind(testAdminId, "admin@example.com", "admin"),
+          "INSERT INTO users (id, email, name, role) VALUES (?, ?, ?, ?)"
+        ).bind(testAdminId, "admin@example.com", "管理者テスト", "admin"),
         
         db.prepare(
-          "INSERT INTO users (id, email, role) VALUES (?, ?, ?)"
-        ).bind(testClientId, "client@example.com", "client"),
+          "INSERT INTO users (id, email, name, role) VALUES (?, ?, ?, ?)"
+        ).bind(testClientId, "client@example.com", "クライアントテスト", "client"),
         
         // 初期プロジェクト作成
         db.prepare(
@@ -47,15 +47,20 @@ export async function seedDatabase(db: any) {
           testProjectId,
           "draft",
           JSON.stringify({
-            company_name: "サンプル株式会社",
-            contact_person: "山田 太郎",
+            companyName: "サンプル株式会社",
+            phone: "090-0000-0000",
+            deadline: "2026-12-31",
             purpose: "コーポレートサイトの全面リニューアル",
-            target_audience: "30代〜50代のビジネスパーソン"
+            targetAudience: "30代〜50代のビジネスパーソン",
+            hasServer: false,
+            hasDomain: false
           }),
           JSON.stringify({
-            features: ["レスポンシブ対応", "ブログ機能", "お問い合わせフォーム"],
-            colors: ["#1a365d", "#2b6cb0"],
-            additional_notes: "モダンで信頼感のあるデザインを希望します。"
+            pages: "TOP、会社概要、サービス紹介、お問い合わせ",
+            designKeywords: ["シンプル", "清潔感", "高級感"],
+            themeColors: ["青系", "グレー系"],
+            browsers: "Safari, Chrome, Edge",
+            assets: "ロゴデータ(AI)あり"
           }),
           0
         ),

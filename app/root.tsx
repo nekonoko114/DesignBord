@@ -31,7 +31,7 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-import { getAuth } from "@clerk/react-router/server";
+import { getAuth, clerkClient } from "@clerk/react-router/server";
 
 // Wrap root loader with Clerk rootAuthLoader
 export const loader = (args: Route.LoaderArgs) => {
@@ -48,14 +48,21 @@ export const loader = (args: Route.LoaderArgs) => {
 
     let user = null;
     let project = null;
+    let noProjectFound = false;
 
     if (userId) {
       try {
+        // Fetch full user details from Clerk API to ensure we always have the email
+        const client = clerkClient(args);
+        const clerkUser = await client.users.getUser(userId);
+        const fetchedEmail = clerkUser.emailAddresses[0]?.emailAddress || "";
+        const fetchedName = clerkUser.firstName || clerkUser.lastName ? `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() : "";
+
         // Sync Clerk user with D1 database user table
         let userResult = await db.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first();
         
         if (!userResult) {
-          const email = auth.sessionClaims?.email || "";
+          const email = fetchedEmail;
           const defaultRole = role || "client";
           
           // Check if there is a pending placeholder user with matching email
@@ -67,17 +74,27 @@ export const loader = (args: Route.LoaderArgs) => {
             const placeholderId = pendingUser.id;
             // Migrating pending user id to real Clerk userId
             await db.batch([
-              db.prepare("INSERT INTO users (id, email, role) VALUES (?, ?, ?)").bind(userId, email, defaultRole),
+              db.prepare("INSERT INTO users (id, email, name, role) VALUES (?, ?, ?, ?)").bind(userId, email, fetchedName, defaultRole),
               db.prepare("UPDATE projects SET client_id = ? WHERE client_id = ?").bind(userId, placeholderId),
               db.prepare("DELETE FROM users WHERE id = ?").bind(placeholderId)
             ]);
-            userResult = { id: userId, email, role: defaultRole };
+            userResult = { id: userId, email, name: fetchedName, role: defaultRole };
           } else {
             await db.prepare(
-              "INSERT INTO users (id, email, role) VALUES (?, ?, ?)"
-            ).bind(userId, email, defaultRole).run();
+              "INSERT INTO users (id, email, name, role) VALUES (?, ?, ?, ?)"
+            ).bind(userId, email, fetchedName, defaultRole).run();
             
-            userResult = { id: userId, email, role: defaultRole };
+            userResult = { id: userId, email, name: fetchedName, role: defaultRole };
+          }
+        } else {
+          // If the existing user has an empty email and we now have the email from Clerk API, update it
+          if (!userResult.email && fetchedEmail) {
+            await db.prepare("UPDATE users SET email = ?, name = ? WHERE id = ?").bind(fetchedEmail, fetchedName, userId).run();
+            userResult.email = fetchedEmail;
+            userResult.name = fetchedName;
+          } else if (!userResult.name && fetchedName) {
+            await db.prepare("UPDATE users SET name = ? WHERE id = ?").bind(fetchedName, userId).run();
+            userResult.name = fetchedName;
           }
         }
 
@@ -85,33 +102,72 @@ export const loader = (args: Route.LoaderArgs) => {
           uid: userResult.id,
           email: userResult.email,
           role: userResult.role,
-          name: auth.sessionClaims?.name || userResult.email.split("@")[0] || "ユーザー",
+          name: fetchedName || userResult.email.split("@")[0] || "ユーザー",
         };
 
         if (userResult.role === "client") {
           // ログインユーザーのプロジェクトを取得
           let projectResult = await db.prepare("SELECT * FROM projects WHERE client_id = ?").bind(userId).first();
           
-          // プロジェクトがない場合、シードされたダミープロジェクトを引き継ぐ
+          // プロジェクトがない場合
           if (!projectResult) {
-            const hasMockProject = await db.prepare("SELECT * FROM projects WHERE client_id = 'test_client_id'").first();
-            if (hasMockProject) {
-              await db.batch([
-                // プロジェクトのクライアントIDを更新
-                db.prepare("UPDATE projects SET client_id = ? WHERE client_id = 'test_client_id'").bind(userId),
-                // ファイルのアップロード者を更新
-                db.prepare("UPDATE files SET uploaded_by = ? WHERE uploaded_by = 'test_client_id'").bind(userId),
-                // アノテーションの投稿者を更新
-                db.prepare("UPDATE annotations SET user_id = ? WHERE user_id = 'test_client_id'").bind(userId)
-              ]);
-              projectResult = await db.prepare("SELECT * FROM projects WHERE client_id = ?").bind(userId).first();
+            const isDev = process.env.NODE_ENV === "development";
+            if (isDev) {
+              const hasMockProject = await db.prepare("SELECT * FROM projects WHERE client_id = 'test_client_id'").first();
+              if (hasMockProject) {
+                await db.batch([
+                  // プロジェクトのクライアントIDを更新
+                  db.prepare("UPDATE projects SET client_id = ? WHERE client_id = 'test_client_id'").bind(userId),
+                  // ファイルのアップロード者を更新
+                  db.prepare("UPDATE files SET uploaded_by = ? WHERE uploaded_by = 'test_client_id'").bind(userId),
+                  // アノテーションの投稿者を更新
+                  db.prepare("UPDATE annotations SET user_id = ? WHERE user_id = 'test_client_id'").bind(userId)
+                ]);
+                projectResult = await db.prepare("SELECT * FROM projects WHERE client_id = ?").bind(userId).first();
+              } else {
+                // 引き継ぐダミープロジェクトも既に他で使われている場合は、自動で新規プロジェクトを作成して紐づける
+                const newProjectId = crypto.randomUUID();
+                await db.batch([
+                  db.prepare(
+                    "INSERT INTO projects (id, client_id, title, progress_rate, booking_limit) VALUES (?, ?, ?, ?, ?)"
+                  ).bind(
+                    newProjectId,
+                    userId,
+                    "新規クライアント Webサイト制作プロジェクト",
+                    0,
+                    3
+                  ),
+                  db.prepare(
+                    "INSERT INTO hearings (id, project_id, status, overview_data, content_data, terms_accepted) VALUES (?, ?, ?, ?, ?, ?)"
+                  ).bind(
+                    crypto.randomUUID(),
+                    newProjectId,
+                    "draft",
+                    "{}",
+                    "{}",
+                    0
+                  )
+                ]);
+                projectResult = await db.prepare("SELECT * FROM projects WHERE client_id = ?").bind(userId).first();
+              }
+            } else {
+              // 本番環境（production）の場合は自動生成せず、フラグを立てる
+              noProjectFound = true;
             }
           }
 
           if (projectResult) {
             // ヒアリングシートのステータスを取得
-            const hearingResult = await db.prepare("SELECT status FROM hearings WHERE project_id = ?").bind(projectResult.id).first();
+            const hearingResult = await db.prepare("SELECT status, content_data FROM hearings WHERE project_id = ?").bind(projectResult.id).first();
             const hearingSubmitted = hearingResult ? hearingResult.status === "submitted" : false;
+
+            let contentSubmitted = false;
+            if (hearingResult && (hearingResult as any).content_data) {
+              try {
+                const contentData = JSON.parse((hearingResult as any).content_data);
+                contentSubmitted = Boolean(contentData.submitted);
+              } catch (e) {}
+            }
 
             project = {
               id: projectResult.id,
@@ -119,6 +175,7 @@ export const loader = (args: Route.LoaderArgs) => {
               progressRate: projectResult.progress_rate,
               bookingLimit: projectResult.booking_limit,
               hearingSubmitted,
+              contentSubmitted,
             };
           }
         }
@@ -130,6 +187,7 @@ export const loader = (args: Route.LoaderArgs) => {
     return {
       user,
       project,
+      noProjectFound,
     };
   });
 };

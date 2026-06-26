@@ -21,6 +21,7 @@ export interface AuthUser {
 interface AuthContextType {
   currentUser: AuthUser | null;
   projectData: ProjectData | null;
+  noProjectFound: boolean;
   loading: boolean;
   refreshProjectData: () => Promise<void>;
 }
@@ -28,6 +29,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({ 
   currentUser: null, 
   projectData: null, 
+  noProjectFound: false,
   loading: false,
   refreshProjectData: async () => {}
 });
@@ -42,10 +44,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const rootData = useRouteLoaderData("root") as { 
     user: AuthUser | null;
     project: ProjectData | null;
+    noProjectFound?: boolean;
   } | null;
 
   const currentUser = rootData?.user ?? null;
   const projectData = rootData?.project ?? null;
+  const noProjectFound = rootData?.noProjectFound ?? false;
 
   const refreshProjectData = async () => {
     // Re-run all active loaders to refresh data from server (D1)
@@ -55,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = {
     currentUser,
     projectData,
+    noProjectFound,
     loading: false, // Solved server-side, so loading is no longer needed client-side
     refreshProjectData
   };

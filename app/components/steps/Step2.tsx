@@ -1,4 +1,5 @@
 import type { FormData } from '../../types/form';
+import { Building2, Target, ShoppingCart, Users, Sparkles } from 'lucide-react';
 
 interface StepProps {
   data: FormData;
@@ -8,11 +9,11 @@ interface StepProps {
 }
 
 const siteTypes = [
-  { value: 'corporate', label: 'コーポレートサイト', desc: '企業の信頼性を高める公式HP', icon: '🏢' },
-  { value: 'lp', label: 'ランディングページ (LP)', desc: '商品・サービスの成約率を最大化', icon: '🎯' },
-  { value: 'ec', label: 'ECサイト', desc: 'ネットショップ・物販・オンライン決済', icon: '🛒' },
-  { value: 'recruit', label: '採用サイト', desc: '求職者へ向けた魅力発信・応募獲得', icon: '👥' },
-  { value: 'other', label: 'その他', desc: 'メディア、ポートフォリオ、独自システム等', icon: '✨' },
+  { value: 'corporate', label: 'コーポレートサイト', desc: '企業の信頼性を高める公式HP', icon: <Building2 size={26} /> },
+  { value: 'lp', label: 'ランディングページ (LP)', desc: '商品・サービスの成約率を最大化', icon: <Target size={26} /> },
+  { value: 'ec', label: 'ECサイト', desc: 'ネットショップ・物販・オンライン決済', icon: <ShoppingCart size={26} /> },
+  { value: 'recruit', label: '採用サイト', desc: '求職者へ向けた魅力発信・応募獲得', icon: <Users size={26} /> },
+  { value: 'other', label: 'その他', desc: 'メディア、ポートフォリオ、独自システム等', icon: <Sparkles size={26} /> },
 ];
 
 export function Step2({ data, updateData, onNext, onPrev }: StepProps) {
@@ -32,15 +33,14 @@ export function Step2({ data, updateData, onNext, onPrev }: StepProps) {
 
   return (
     <div className="step-fade-enter-active">
-      <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem', color: 'var(--accent-color)' }}>
+      <h2 style={{ fontSize: '1.4rem', marginBottom: '0.4rem', color: 'var(--accent-color)' }}>
         02. Project Purpose
       </h2>
-      <p style={{ marginBottom: '2rem', opacity: 0.8 }}>Webサイトを制作する背景や目的を教えてください。</p>
+      <p style={{ marginBottom: '1.2rem', opacity: 0.8, fontSize: '0.85rem' }}>Webサイトを制作する背景や目的を教えてください。</p>
 
       <form onSubmit={handleSubmit}>
-        {/* サイト種別ビジュアル選択カード */}
-        <div className="glass-panel" style={{ marginBottom: '2rem' }}>
-          <label style={{ display: 'block', marginBottom: '1.2rem', fontWeight: 600, fontSize: '1.1rem' }}>サイト種別</label>
+        <div className="glass-panel" style={{ marginBottom: '1.2rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: 600, fontSize: '0.9rem' }}>サイト種別</label>
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
@@ -53,7 +53,7 @@ export function Step2({ data, updateData, onNext, onPrev }: StepProps) {
                   key={item.value}
                   onClick={() => updateData({ siteType: item.value })}
                   style={{
-                    padding: '1.8rem 1rem',
+                    padding: '1rem 0.8rem',
                     borderRadius: '16px',
                     border: isSelected ? '1px solid var(--accent-color)' : '1px solid var(--glass-border)',
                     background: isSelected ? 'rgba(184, 156, 109, 0.08)' : 'rgba(255, 255, 255, 0.02)',
@@ -63,13 +63,23 @@ export function Step2({ data, updateData, onNext, onPrev }: StepProps) {
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    gap: '0.8rem',
+                    gap: '0.5rem',
                     textAlign: 'center',
                     transform: isSelected ? 'scale(1.02)' : 'scale(1)'
                   }}
                 >
-                  <span style={{ fontSize: '2.5rem', opacity: isSelected ? 1 : 0.6, transition: '0.3s' }}>{item.icon}</span>
-                  <span style={{ fontWeight: 600, fontSize: '0.95rem', color: isSelected ? 'var(--accent-color)' : 'var(--text-color)', transition: '0.3s' }}>{item.label}</span>
+                  <div style={{ 
+                    color: isSelected ? 'var(--accent-color)' : 'var(--text-color)', 
+                    opacity: isSelected ? 1 : 0.6, 
+                    transition: '0.3s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: '0.2rem'
+                  }}>
+                    {item.icon}
+                  </div>
+                  <span style={{ fontWeight: 600, fontSize: '0.85rem', color: isSelected ? 'var(--accent-color)' : 'var(--text-color)', transition: '0.3s' }}>{item.label}</span>
                   <span style={{ fontSize: '0.75rem', opacity: 0.5, lineHeight: '1.4' }}>{item.desc}</span>
                 </div>
               );
@@ -102,7 +112,7 @@ export function Step2({ data, updateData, onNext, onPrev }: StepProps) {
             </div>
           </div>
 
-          <div className="glass-panel" style={{ transform: 'translateY(-1rem)' }}>
+          <div className="glass-panel">
             <div className="form-group">
               <label htmlFor="purpose">具体的なサイトの目的</label>
               <textarea
@@ -145,7 +155,7 @@ export function Step2({ data, updateData, onNext, onPrev }: StepProps) {
           </div>
         </div>
 
-        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', marginTop: '2rem' }}>
+        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', marginTop: '1.2rem' }}>
           <button type="button" onClick={onPrev} style={{ background: 'transparent', border: '2px solid var(--glass-border)', color: 'var(--text-color)' }}>
             <span style={{ marginRight: '0.5rem' }}>←</span> Back
           </button>
