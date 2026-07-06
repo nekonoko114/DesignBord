@@ -14,6 +14,7 @@ import { clerkMiddleware, rootAuthLoader } from "@clerk/react-router/server";
 import { ClerkProvider } from "@clerk/react-router";
 import { seedDatabase } from "./utils/db.server";
 import { jaJP } from "@clerk/localizations";
+import { Toaster } from "react-hot-toast";
 
 // Export middleware for React Router v8_middleware pipeline
 export const middleware = [clerkMiddleware()];
@@ -169,11 +170,23 @@ export const loader = (args: Route.LoaderArgs) => {
               } catch (e) {}
             }
 
+            let metaData = {};
+            if (projectResult.meta_data) {
+              try {
+                metaData = JSON.parse(projectResult.meta_data as string);
+              } catch (e) {}
+            }
+
             project = {
               id: projectResult.id,
               title: projectResult.title,
               progressRate: projectResult.progress_rate,
               bookingLimit: projectResult.booking_limit,
+              currentPhase: projectResult.current_phase,
+              planName: (metaData as any).planName || "未設定",
+              launchDate: (metaData as any).launchDate || "未設定",
+              siteType: (metaData as any).siteType || "未設定",
+              directorName: (metaData as any).directorName || "未設定",
               hearingSubmitted,
               contentSubmitted,
             };
@@ -215,6 +228,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
   return (
     <ClerkProvider loaderData={loaderData} localization={jaJP}>
       <Outlet />
+      <Toaster position="bottom-right" />
     </ClerkProvider>
   );
 }

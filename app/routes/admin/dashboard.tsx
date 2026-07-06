@@ -59,6 +59,25 @@ export async function loader(args: Route.LoaderArgs) {
       };
     });
 
+    // Load upcoming bookings
+    const { results: bookingResults } = await db.prepare(`
+      SELECT b.*, p.title as project_title, u.name as client_name
+      FROM bookings b
+      JOIN projects p ON b.project_id = p.id
+      JOIN users u ON p.client_id = u.id
+      WHERE b.status = 'reserved'
+      ORDER BY b.scheduled_at ASC
+    `).all();
+
+    const upcomingBookings = (bookingResults || []).map((row: any) => ({
+      id: row.id,
+      projectId: row.project_id,
+      projectTitle: row.project_title,
+      clientName: row.client_name,
+      scheduledAt: row.scheduled_at,
+      status: row.status
+    }));
+
     // Detect stagnant projects and dispatch Discord alerts
     const stagnantList = projects.filter((p: any) => isStagnant(p.lastActivityAt));
     if (stagnantList.length > 0) {
@@ -78,10 +97,10 @@ export async function loader(args: Route.LoaderArgs) {
       }
     }
 
-    return { projects };
+    return { projects, upcomingBookings };
   } catch (e) {
     console.error("Failed to load projects from D1:", e);
-    return { projects: [] };
+    return { projects: [], upcomingBookings: [] };
   }
 }
 
@@ -118,6 +137,21 @@ export async function action(args: Route.ActionArgs) {
         console.error("Failed to update progress rate in D1:", e);
         return { error: "進捗率の更新に失敗しました。" };
       }
+    }
+  }
+
+  if (intent === "updateBookingStatus") {
+    const bookingId = formData.get("bookingId") as string;
+    const status = formData.get("status") as string;
+
+    if (!bookingId || !status) return { error: "予約IDとステータスが必要です。" };
+
+    try {
+      await db.prepare("UPDATE bookings SET status = ? WHERE id = ?").bind(status, bookingId).run();
+      return { success: true };
+    } catch (e) {
+      console.error("Failed to update booking status:", e);
+      return { error: "予約ステータスの更新に失敗しました。" };
     }
   }
 
@@ -173,7 +207,7 @@ export async function action(args: Route.ActionArgs) {
 }
 
 export default function AdminDashboard() {
-  const { projects } = useLoaderData<typeof loader>();
+  const { projects, upcomingBookings } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const fetcher = useFetcher();
 
@@ -266,6 +300,16 @@ export default function AdminDashboard() {
     linkElement.setAttribute('href', url);
     linkElement.setAttribute('download', `${project.clientName}_hearing.csv`);
     linkElement.click();
+  };
+
+  const handleUpdateBookingStatus = (bookingId: string, status: string) => {
+    if (!window.confirm(status === 'completed' ? 'この予約を完了済みにしますか？' : 'この予約をキャンセルしますか？')) return;
+    fetcher.submit({ intent: "updateBookingStatus", bookingId, status }, { method: "post" });
+  };
+
+  const formatDateTime = (unix: number) => {
+    const d = new Date(unix * 1000);
+    return d.toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
   const stagnantCount = projects.filter((p: any) => isStagnant(p.lastActivityAt)).length;
@@ -375,6 +419,52 @@ export default function AdminDashboard() {
         </div>
       </div>
     </header>
+
+      {/* Upcoming Bookings Panel */}
+      <div className="neumorphic-panel" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+        <h3 className="font-mincho" style={{ fontSize: '1.2rem', marginBottom: '1rem', marginTop: 0 }}>今後の面談予約</h3>
+
+        {upcomingBookings && upcomingBookings.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+            {upcomingBookings.map((booking: any) => (
+              <div key={booking.id} style={{
+                padding: '1rem',
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid var(--neu-border)',
+                borderRadius: '8px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span className="font-gothic" style={{ fontWeight: 600, color: 'var(--accent-color)' }}>
+                    {formatDateTime(booking.scheduledAt)}
+                  </span>
+                  <span className="font-gothic" style={{ fontSize: '0.75rem', opacity: 0.6 }}>
+                    {booking.clientName}様
+                  </span>
+                </div>
+                <div className="font-gothic" style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
+                  {booking.projectTitle}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => handleUpdateBookingStatus(booking.id, 'completed')}
+                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', background: '#28a745', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    完了
+                  </button>
+                  <button
+                    onClick={() => handleUpdateBookingStatus(booking.id, 'cancelled')}
+                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', background: 'transparent', border: '1px solid #dc3545', color: '#dc3545', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="font-gothic" style={{ opacity: 0.5, fontSize: '0.9rem' }}>現在予約されている面談はありません。</p>
+        )}
+      </div>
 
       {/* Projects List Panel */}
       <div className="neumorphic-panel" style={{ padding: '0', overflow: 'hidden' }}>

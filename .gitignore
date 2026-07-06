@@ -13,3 +13,6 @@
 # Temporary scripts
 backfill_emails.ts
 get_emails.ts
+
+# clerk configuration (can include secrets)
+/.clerk/
