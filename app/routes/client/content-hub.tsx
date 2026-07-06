@@ -3,6 +3,7 @@ import { useLoaderData, useActionData, Link } from 'react-router';
 import type { Route } from './+types/content-hub';
 import { requireUserRole } from '../../utils/auth.server';
 import { sendDiscordNotification } from '../../utils/discord.server';
+import toast from 'react-hot-toast';
 
 export interface UploadedFile {
   id: string;
@@ -373,7 +374,7 @@ export default function ContentHub() {
 
     for (const file of filesArray) {
       if (file.size > 50 * 1024 * 1024) {
-        alert(`ファイルサイズが大きすぎます（50MB以下にしてください）: ${file.name}`);
+        toast.error(`ファイルサイズが大きすぎます（50MB以下にしてください）: ${file.name}`);
         continue;
       }
 
@@ -402,6 +403,7 @@ export default function ContentHub() {
         const result = await response.json();
         
         if (result.success && result.file) {
+          toast.success(`${file.name} をアップロードしました`);
           setSections(prev => prev.map(s => {
             if (s.id === activeSectionId) {
               return { ...s, files: [...(s.files || []), result.file] };
@@ -409,11 +411,11 @@ export default function ContentHub() {
             return s;
           }));
         } else {
-          alert(`ファイルのアップロードに失敗しました: ${result.error || file.name}`);
+          toast.error(`ファイルのアップロードに失敗しました: ${result.error || file.name}`);
         }
       } catch (e) {
         console.error("Upload error:", e);
-        alert(`ファイルのアップロードに失敗しました: ${file.name}`);
+        toast.error(`ファイルのアップロードに失敗しました: ${file.name}`);
       } finally {
         setUploadingFiles(prev => {
           const next = { ...prev };
@@ -471,6 +473,7 @@ export default function ContentHub() {
       const result = await response.json();
 
       if (result.success) {
+        toast.success(`「${fileName}」を削除しました`);
         setSections(prev => prev.map(s => {
           if (s.id === activeSectionId) {
             return { ...s, files: (s.files || []).filter(f => f.id !== fileId) };
@@ -478,11 +481,11 @@ export default function ContentHub() {
           return s;
         }));
       } else {
-        alert(`ファイルの削除に失敗しました: ${result.error}`);
+        toast.error(`ファイルの削除に失敗しました: ${result.error}`);
       }
     } catch (e) {
       console.error("Delete file error:", e);
-      alert("ファイル削除中にエラーが発生しました。");
+      toast.error("ファイル削除中にエラーが発生しました。");
     }
   };
 
@@ -508,14 +511,15 @@ export default function ContentHub() {
 
       if (result.success) {
         setSavingStatus('saved');
+        toast.success("下書きを保存しました");
       } else {
         setSavingStatus('error');
-        alert('保存に失敗しました。');
+        toast.error('保存に失敗しました。');
       }
     } catch (e) {
       console.error('Save error:', e);
       setSavingStatus('error');
-      alert('保存に失敗しました。');
+      toast.error('保存に失敗しました。');
     }
   };
 
@@ -548,15 +552,16 @@ export default function ContentHub() {
       const result = await response.json();
 
       if (result.success) {
+        toast.success("原稿を提出しました");
         setIsEditing(false);
         // リロードしてデータを再検証
         window.location.reload();
       } else {
-        alert(`送信に失敗しました: ${result.error}`);
+        toast.error(`送信に失敗しました: ${result.error}`);
       }
     } catch (e) {
       console.error("Submit content error:", e);
-      alert("提出処理中にエラーが発生しました。");
+      toast.error("提出処理中にエラーが発生しました。");
     } finally {
       setIsSubmitting(false);
     }

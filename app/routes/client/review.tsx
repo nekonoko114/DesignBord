@@ -171,11 +171,24 @@ export default function ClientReview() {
     }
   };
 
-  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
+  const handleImageClick = (e: React.MouseEvent<HTMLImageElement> | React.TouchEvent<HTMLImageElement>) => {
     if (!imageRef.current) return;
     const rect = imageRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+    let clientX, clientY;
+
+    if ('changedTouches' in e && e.changedTouches.length > 0) {
+      // Prevent duplicate firing on mobile devices
+      e.preventDefault();
+      clientX = e.changedTouches[0].clientX;
+      clientY = e.changedTouches[0].clientY;
+    } else {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
     
     setNewCommentPos({ x, y });
     setNewCommentText('');
@@ -313,6 +326,7 @@ export default function ClientReview() {
                     pointerEvents: 'auto',
                   }}
                   onClick={handleImageClick}
+                  onTouchEnd={handleImageClick}
                 />
                 
                 {/* Watermark Overlay */}
