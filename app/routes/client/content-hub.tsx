@@ -369,59 +369,83 @@ export default function ContentHub() {
 
   // Perform upload logic for multiple files
   const performUpload = async (filesArray: File[]) => {
+    const _startTime = performance.now();
     if (!activeSectionId) return;
 
+    // 1. Filter out oversized files and aggregate them
+    const MAX_SIZE = 50 * 1024 * 1024;
+    const oversizedFiles = [];
+    const validFiles = [];
+
     for (const file of filesArray) {
-      if (file.size > 50 * 1024 * 1024) {
-        alert(`ファイルサイズが大きすぎます（50MB以下にしてください）: ${file.name}`);
-        continue;
-      }
-
-      const fileId = crypto.randomUUID();
-      const uploadFormData = new FormData();
-      uploadFormData.append("intent", "upload-file");
-      uploadFormData.append("sectionId", activeSectionId);
-      uploadFormData.append("fileId", fileId);
-      uploadFormData.append("file", file);
-
-      setUploadingFiles(prev => ({ ...prev, [fileId]: 50 }));
-
-      try {
-        const response = await fetch("/api/content-hub", {
-          method: "POST",
-          body: uploadFormData
-        });
-
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const contentType = response.headers.get("content-type");
-        if (!contentType || contentType.indexOf("application/json") === -1) {
-          console.error("Received non-JSON response:", await response.text());
-          throw new Error("サーバーから不正なレスポンスが返されました。");
-        }
-
-        const result = await response.json();
-        
-        if (result.success && result.file) {
-          setSections(prev => prev.map(s => {
-            if (s.id === activeSectionId) {
-              return { ...s, files: [...(s.files || []), result.file] };
-            }
-            return s;
-          }));
-        } else {
-          alert(`ファイルのアップロードに失敗しました: ${result.error || file.name}`);
-        }
-      } catch (e) {
-        console.error("Upload error:", e);
-        alert(`ファイルのアップロードに失敗しました: ${file.name}`);
-      } finally {
-        setUploadingFiles(prev => {
-          const next = { ...prev };
-          delete next[fileId];
-          return next;
-        });
+      if (file.size > MAX_SIZE) {
+        oversizedFiles.push(file.name);
+      } else {
+        validFiles.push(file);
       }
     }
+
+    if (oversizedFiles.length > 0) {
+      alert(`以下のファイルはサイズが大きすぎます（50MB以下にしてください）:\n\n${oversizedFiles.join('\n')}`);
+    }
+
+    if (validFiles.length === 0) return;
+
+    // 2. Process valid files with a concurrency limit (chunking)
+    const CONCURRENCY_LIMIT = 3;
+
+    for (let i = 0; i < validFiles.length; i += CONCURRENCY_LIMIT) {
+      const chunk = validFiles.slice(i, i + CONCURRENCY_LIMIT);
+
+      await Promise.all(chunk.map(async (file) => {
+        const fileId = crypto.randomUUID();
+        const uploadFormData = new FormData();
+        uploadFormData.append("intent", "upload-file");
+        uploadFormData.append("sectionId", activeSectionId);
+        uploadFormData.append("fileId", fileId);
+        uploadFormData.append("file", file);
+
+        setUploadingFiles(prev => ({ ...prev, [fileId]: 50 }));
+
+        try {
+          const response = await fetch("/api/content-hub", {
+            method: "POST",
+            body: uploadFormData
+          });
+
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const contentType = response.headers.get("content-type");
+          if (!contentType || contentType.indexOf("application/json") === -1) {
+            console.error("Received non-JSON response:", await response.text());
+            throw new Error("サーバーから不正なレスポンスが返されました。");
+          }
+
+          const result = await response.json();
+
+          if (result.success && result.file) {
+            setSections(prev => prev.map(s => {
+              if (s.id === activeSectionId) {
+                return { ...s, files: [...(s.files || []), result.file] };
+              }
+              return s;
+            }));
+          } else {
+            alert(`ファイルのアップロードに失敗しました: ${result.error || file.name}`);
+          }
+        } catch (e) {
+          console.error("Upload error:", e);
+          alert(`ファイルのアップロードに失敗しました: ${file.name}`);
+        } finally {
+          setUploadingFiles(prev => {
+            const next = { ...prev };
+            delete next[fileId];
+            return next;
+          });
+        }
+      }));
+    }
+
+    console.log(`[Upload Benchmark] Uploaded ${filesArray.length} files in ${(performance.now() - _startTime).toFixed(2)}ms`);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
