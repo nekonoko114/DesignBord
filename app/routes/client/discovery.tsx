@@ -61,21 +61,14 @@ export async function loader(args: Route.LoaderArgs) {
         }
 
         // Normalize radio boolean values from DB
-        if (mappedAnswer.hasServer === 1 || mappedAnswer.hasServer === '1' || mappedAnswer.hasServer === true) {
-          mappedAnswer.hasServer = true;
-        } else if (mappedAnswer.hasServer === 0 || mappedAnswer.hasServer === '0' || mappedAnswer.hasServer === false) {
-          mappedAnswer.hasServer = false;
-        } else {
-          mappedAnswer.hasServer = null;
-        }
+        const normalizeBoolean = (val: any): boolean | null => {
+          if (val === 1 || val === '1' || val === true) return true;
+          if (val === 0 || val === '0' || val === false) return false;
+          return null;
+        };
 
-        if (mappedAnswer.hasDomain === 1 || mappedAnswer.hasDomain === '1' || mappedAnswer.hasDomain === true) {
-          mappedAnswer.hasDomain = true;
-        } else if (mappedAnswer.hasDomain === 0 || mappedAnswer.hasDomain === '0' || mappedAnswer.hasDomain === false) {
-          mappedAnswer.hasDomain = false;
-        } else {
-          mappedAnswer.hasDomain = null;
-        }
+        mappedAnswer.hasServer = normalizeBoolean(mappedAnswer.hasServer);
+        mappedAnswer.hasDomain = normalizeBoolean(mappedAnswer.hasDomain);
 
         // Support string parsing for array fields if saved as strings
         if (typeof mappedAnswer.designKeywords === 'string') {

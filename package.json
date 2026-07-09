@@ -9,6 +9,7 @@
     "typecheck": "react-router typegen && tsc",
     "deploy": "npm run build && wrangler deploy",
     "test": "vitest"
+    "test": "vitest run"
   },
   "dependencies": {
     "@clerk/localizations": "^4.11.0",
