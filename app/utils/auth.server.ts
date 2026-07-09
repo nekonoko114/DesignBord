@@ -1,8 +1,8 @@
-import { redirect } from "react-router";
+import { redirect, type LoaderFunctionArgs, type ActionFunctionArgs } from "react-router";
 import { getAuth } from "@clerk/react-router/server";
 
 
-export async function requireUserRole(args: any, allowedRoles: ("admin" | "client")[]) {
+export async function requireUserRole(args: LoaderFunctionArgs | ActionFunctionArgs, allowedRoles: ("admin" | "client")[]) {
   // Extract auth using getAuth
   const auth = await getAuth(args);
   const request = args.request;
