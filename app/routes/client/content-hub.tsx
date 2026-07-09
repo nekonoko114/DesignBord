@@ -56,17 +56,14 @@ export async function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-  console.log(`[ACTION START] intent processing started for ${args.request.url}`);
   try {
     const { context, request } = args;
     const { userId } = await requireUserRole(args, ["client"]);
-    console.log(`[ACTION] User ${userId} authorized.`);
     const db = (context as any).cloudflare.env.DB;
     const bucket = (context as any).cloudflare.env.BUCKET;
 
     const formData = await request.formData();
     const intent = formData.get("intent") as string;
-    console.log(`[ACTION] intent: ${intent}`);
 
     const project = await db.prepare("SELECT id, title FROM projects WHERE client_id = ?").bind(userId).first();
     if (!project) {
@@ -105,14 +102,11 @@ export async function action(args: Route.ActionArgs) {
     }
 
     if (intent === "submit-content") {
-      console.log(`[ACTION] intent === submit-content`);
       const sectionsString = formData.get("sections") as string;
       if (!sectionsString) {
-        console.log(`[ACTION] No sections data`);
         return new Response(JSON.stringify({ error: "原稿データがありません。" }), { status: 400, headers: { "Content-Type": "application/json" } });
       }
 
-      console.log(`[ACTION] Updating hearing data...`);
       const hearing = await db.prepare("SELECT * FROM hearings WHERE project_id = ?").bind(project.id).first();
       const hearingId = hearing ? hearing.id : crypto.randomUUID();
       
@@ -134,7 +128,6 @@ export async function action(args: Route.ActionArgs) {
 
       await db.prepare("UPDATE projects SET last_activity_at = strftime('%s', 'now') WHERE id = ?").bind(project.id).run();
 
-      console.log(`[ACTION] Dispatching discord notification...`);
       // Dispatch Discord webhook notification
       const env = (context as any).cloudflare.env;
       try {
@@ -147,12 +140,10 @@ export async function action(args: Route.ActionArgs) {
           ],
           color: 3447003, // 青系
         });
-        console.log(`[ACTION] Discord notification sent successfully.`);
       } catch (err: any) {
         console.error(`[ACTION] Discord notification failed:`, err);
       }
 
-      console.log(`[ACTION] Returning success response`);
       return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
     }
 
