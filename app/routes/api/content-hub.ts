@@ -1,6 +1,5 @@
 import { requireUserRole } from "../../utils/auth.server";
 import { sendDiscordNotification } from "../../utils/discord.server";
-import type { Route } from "./+types/content-hub"; // wait, typescript might complain if the type doesn't exist, I'll use any
 
 export async function action(args: any) {
   try {
