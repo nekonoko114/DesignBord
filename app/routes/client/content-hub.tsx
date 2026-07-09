@@ -158,14 +158,24 @@ export async function action(args: Route.ActionArgs) {
 
     if (intent === "upload-file") {
       const file = formData.get("file") as File;
-      const fileId = formData.get("fileId") as string || crypto.randomUUID();
+      const rawFileId = formData.get("fileId") as string || crypto.randomUUID();
       const sectionId = formData.get("sectionId") as string;
 
       if (!file) {
         return new Response(JSON.stringify({ error: "ファイルがありません。" }), { status: 400, headers: { "Content-Type": "application/json" } });
       }
 
-      const key = `projects/${project.id}/${fileId}_${file.name}`;
+      // Sanitize fileId to allow only alphanumeric characters, hyphens, and underscores
+      const safeFileId = rawFileId.replace(/[^a-zA-Z0-9_-]/g, "");
+
+      // Sanitize file.name to extract base name and prevent path traversal
+      // 1. Replace backslashes with forward slashes
+      // 2. Extract the last part after the last slash
+      // 3. Remove leading dots and replace null bytes
+      let safeFileName = file.name.replace(/\\/g, '/').split('/').pop() || "unknown";
+      safeFileName = safeFileName.replace(/^\.+/, "").replace(/[\x00-\x1f\x80-\x9f]/g, ""); // Remove control characters only
+
+      const key = `projects/${project.id}/${safeFileId}_${safeFileName}`;
       const buffer = await file.arrayBuffer();
 
       // 1. Upload to Cloudflare R2 BUCKET
@@ -179,7 +189,7 @@ export async function action(args: Route.ActionArgs) {
       // 2. Insert record to files table
       await db.prepare(
         "INSERT INTO files (id, project_id, file_type, r2_url, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?, strftime('%s', 'now'))"
-      ).bind(fileId, project.id, fileType, r2Url, userId).run();
+      ).bind(rawFileId, project.id, fileType, r2Url, userId).run();
 
       // 3. Append to sections list in hearings.content_data
       const hearing = await db.prepare("SELECT id, content_data FROM hearings WHERE project_id = ?").bind(project.id).first();
@@ -189,7 +199,7 @@ export async function action(args: Route.ActionArgs) {
           contentDataObj.sections = contentDataObj.sections.map((s: any) => {
             if (s.id === sectionId) {
               const newFile = {
-                id: fileId,
+                id: rawFileId,
                 url: r2Url,
                 name: file.name,
                 type: file.type,
@@ -212,7 +222,7 @@ export async function action(args: Route.ActionArgs) {
       return new Response(JSON.stringify({ 
         success: true, 
         file: {
-          id: fileId,
+          id: rawFileId,
           url: r2Url,
           name: file.name,
           type: file.type,
