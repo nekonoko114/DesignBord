@@ -8,7 +8,11 @@
     "test": "vitest run",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "test": "vitest"
+    "test": "vitest",
+    "test:run": "vitest run"
+    "test": "vitest run"
   },
   "dependencies": {
     "@clerk/localizations": "^4.11.0",
