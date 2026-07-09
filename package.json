@@ -9,6 +9,8 @@
     "typecheck": "react-router typegen && tsc",
     "deploy": "npm run build && wrangler deploy",
     "test": "vitest"
+    "test": "vitest",
+    "test:run": "vitest run"
     "test": "vitest run"
   },
   "dependencies": {
