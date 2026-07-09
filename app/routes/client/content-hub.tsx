@@ -230,7 +230,11 @@ export async function action(args: Route.ActionArgs) {
         return new Response(JSON.stringify({ error: "ファイルIDがありません。" }), { status: 400, headers: { "Content-Type": "application/json" } });
       }
 
-      const fileRecord = await db.prepare("SELECT * FROM files WHERE id = ?").bind(fileId).first();
+      const fileRecord = await db.prepare("SELECT * FROM files WHERE id = ? AND project_id = ?").bind(fileId, project.id).first();
+
+      if (!fileRecord) {
+        return new Response(JSON.stringify({ error: "ファイルが見つからないか、削除する権限がありません。" }), { status: 403, headers: { "Content-Type": "application/json" } });
+      }
       
       let r2Key = "";
       const hearing = await db.prepare("SELECT id, content_data FROM hearings WHERE project_id = ?").bind(project.id).first();
@@ -265,7 +269,7 @@ export async function action(args: Route.ActionArgs) {
       }
 
       // Delete from files table
-      await db.prepare("DELETE FROM files WHERE id = ?").bind(fileId).run();
+      await db.prepare("DELETE FROM files WHERE id = ? AND project_id = ?").bind(fileId, project.id).run();
 
       await db.prepare("UPDATE projects SET last_activity_at = strftime('%s', 'now') WHERE id = ?").bind(project.id).run();
 
