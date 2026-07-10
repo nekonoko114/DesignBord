@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "react-router build",
+    "test": "vitest run",
     "dev": "react-router dev",
     "test": "vitest run",
     "start": "react-router-serve ./build/server/index.js",
@@ -36,6 +37,7 @@
     "@types/node": "^20",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@vitest/ui": "^4.1.10",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.1.6",
