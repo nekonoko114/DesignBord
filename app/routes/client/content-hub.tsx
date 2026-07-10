@@ -56,17 +56,14 @@ export async function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-  console.log(`[ACTION START] intent processing started for ${args.request.url}`);
   try {
     const { context, request } = args;
     const { userId } = await requireUserRole(args, ["client"]);
-    console.log(`[ACTION] User ${userId} authorized.`);
     const db = (context as any).cloudflare.env.DB;
     const bucket = (context as any).cloudflare.env.BUCKET;
 
     const formData = await request.formData();
     const intent = formData.get("intent") as string;
-    console.log(`[ACTION] intent: ${intent}`);
 
     const project = await db.prepare("SELECT id, title FROM projects WHERE client_id = ?").bind(userId).first();
     if (!project) {
@@ -105,14 +102,11 @@ export async function action(args: Route.ActionArgs) {
     }
 
     if (intent === "submit-content") {
-      console.log(`[ACTION] intent === submit-content`);
       const sectionsString = formData.get("sections") as string;
       if (!sectionsString) {
-        console.log(`[ACTION] No sections data`);
         return new Response(JSON.stringify({ error: "原稿データがありません。" }), { status: 400, headers: { "Content-Type": "application/json" } });
       }
 
-      console.log(`[ACTION] Updating hearing data...`);
       const hearing = await db.prepare("SELECT * FROM hearings WHERE project_id = ?").bind(project.id).first();
       const hearingId = hearing ? hearing.id : crypto.randomUUID();
       
@@ -134,7 +128,6 @@ export async function action(args: Route.ActionArgs) {
 
       await db.prepare("UPDATE projects SET last_activity_at = strftime('%s', 'now') WHERE id = ?").bind(project.id).run();
 
-      console.log(`[ACTION] Dispatching discord notification...`);
       // Dispatch Discord webhook notification
       const env = (context as any).cloudflare.env;
       try {
@@ -147,25 +140,33 @@ export async function action(args: Route.ActionArgs) {
           ],
           color: 3447003, // 青系
         });
-        console.log(`[ACTION] Discord notification sent successfully.`);
       } catch (err: any) {
         console.error(`[ACTION] Discord notification failed:`, err);
       }
 
-      console.log(`[ACTION] Returning success response`);
       return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
     }
 
     if (intent === "upload-file") {
       const file = formData.get("file") as File;
-      const fileId = formData.get("fileId") as string || crypto.randomUUID();
+      const rawFileId = formData.get("fileId") as string || crypto.randomUUID();
       const sectionId = formData.get("sectionId") as string;
 
       if (!file) {
         return new Response(JSON.stringify({ error: "ファイルがありません。" }), { status: 400, headers: { "Content-Type": "application/json" } });
       }
 
-      const key = `projects/${project.id}/${fileId}_${file.name}`;
+      // Sanitize fileId to allow only alphanumeric characters, hyphens, and underscores
+      const safeFileId = rawFileId.replace(/[^a-zA-Z0-9_-]/g, "");
+
+      // Sanitize file.name to extract base name and prevent path traversal
+      // 1. Replace backslashes with forward slashes
+      // 2. Extract the last part after the last slash
+      // 3. Remove leading dots and replace null bytes
+      let safeFileName = file.name.replace(/\\/g, '/').split('/').pop() || "unknown";
+      safeFileName = safeFileName.replace(/^\.+/, "").replace(/[\x00-\x1f\x80-\x9f]/g, ""); // Remove control characters only
+
+      const key = `projects/${project.id}/${safeFileId}_${safeFileName}`;
       const buffer = await file.arrayBuffer();
 
       // 1. Upload to Cloudflare R2 BUCKET
@@ -179,7 +180,7 @@ export async function action(args: Route.ActionArgs) {
       // 2. Insert record to files table
       await db.prepare(
         "INSERT INTO files (id, project_id, file_type, r2_url, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?, strftime('%s', 'now'))"
-      ).bind(fileId, project.id, fileType, r2Url, userId).run();
+      ).bind(rawFileId, project.id, fileType, r2Url, userId).run();
 
       // 3. Append to sections list in hearings.content_data
       const hearing = await db.prepare("SELECT id, content_data FROM hearings WHERE project_id = ?").bind(project.id).first();
@@ -189,7 +190,7 @@ export async function action(args: Route.ActionArgs) {
           contentDataObj.sections = contentDataObj.sections.map((s: any) => {
             if (s.id === sectionId) {
               const newFile = {
-                id: fileId,
+                id: rawFileId,
                 url: r2Url,
                 name: file.name,
                 type: file.type,
@@ -212,7 +213,7 @@ export async function action(args: Route.ActionArgs) {
       return new Response(JSON.stringify({ 
         success: true, 
         file: {
-          id: fileId,
+          id: rawFileId,
           url: r2Url,
           name: file.name,
           type: file.type,
@@ -369,59 +370,83 @@ export default function ContentHub() {
 
   // Perform upload logic for multiple files
   const performUpload = async (filesArray: File[]) => {
+    const _startTime = performance.now();
     if (!activeSectionId) return;
 
+    // 1. Filter out oversized files and aggregate them
+    const MAX_SIZE = 50 * 1024 * 1024;
+    const oversizedFiles = [];
+    const validFiles = [];
+
     for (const file of filesArray) {
-      if (file.size > 50 * 1024 * 1024) {
-        alert(`ファイルサイズが大きすぎます（50MB以下にしてください）: ${file.name}`);
-        continue;
-      }
-
-      const fileId = crypto.randomUUID();
-      const uploadFormData = new FormData();
-      uploadFormData.append("intent", "upload-file");
-      uploadFormData.append("sectionId", activeSectionId);
-      uploadFormData.append("fileId", fileId);
-      uploadFormData.append("file", file);
-
-      setUploadingFiles(prev => ({ ...prev, [fileId]: 50 }));
-
-      try {
-        const response = await fetch("/api/content-hub", {
-          method: "POST",
-          body: uploadFormData
-        });
-
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const contentType = response.headers.get("content-type");
-        if (!contentType || contentType.indexOf("application/json") === -1) {
-          console.error("Received non-JSON response:", await response.text());
-          throw new Error("サーバーから不正なレスポンスが返されました。");
-        }
-
-        const result = await response.json();
-        
-        if (result.success && result.file) {
-          setSections(prev => prev.map(s => {
-            if (s.id === activeSectionId) {
-              return { ...s, files: [...(s.files || []), result.file] };
-            }
-            return s;
-          }));
-        } else {
-          alert(`ファイルのアップロードに失敗しました: ${result.error || file.name}`);
-        }
-      } catch (e) {
-        console.error("Upload error:", e);
-        alert(`ファイルのアップロードに失敗しました: ${file.name}`);
-      } finally {
-        setUploadingFiles(prev => {
-          const next = { ...prev };
-          delete next[fileId];
-          return next;
-        });
+      if (file.size > MAX_SIZE) {
+        oversizedFiles.push(file.name);
+      } else {
+        validFiles.push(file);
       }
     }
+
+    if (oversizedFiles.length > 0) {
+      alert(`以下のファイルはサイズが大きすぎます（50MB以下にしてください）:\n\n${oversizedFiles.join('\n')}`);
+    }
+
+    if (validFiles.length === 0) return;
+
+    // 2. Process valid files with a concurrency limit (chunking)
+    const CONCURRENCY_LIMIT = 3;
+
+    for (let i = 0; i < validFiles.length; i += CONCURRENCY_LIMIT) {
+      const chunk = validFiles.slice(i, i + CONCURRENCY_LIMIT);
+
+      await Promise.all(chunk.map(async (file) => {
+        const fileId = crypto.randomUUID();
+        const uploadFormData = new FormData();
+        uploadFormData.append("intent", "upload-file");
+        uploadFormData.append("sectionId", activeSectionId);
+        uploadFormData.append("fileId", fileId);
+        uploadFormData.append("file", file);
+
+        setUploadingFiles(prev => ({ ...prev, [fileId]: 50 }));
+
+        try {
+          const response = await fetch("/api/content-hub", {
+            method: "POST",
+            body: uploadFormData
+          });
+
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const contentType = response.headers.get("content-type");
+          if (!contentType || contentType.indexOf("application/json") === -1) {
+            console.error("Received non-JSON response:", await response.text());
+            throw new Error("サーバーから不正なレスポンスが返されました。");
+          }
+
+          const result = await response.json();
+
+          if (result.success && result.file) {
+            setSections(prev => prev.map(s => {
+              if (s.id === activeSectionId) {
+                return { ...s, files: [...(s.files || []), result.file] };
+              }
+              return s;
+            }));
+          } else {
+            alert(`ファイルのアップロードに失敗しました: ${result.error || file.name}`);
+          }
+        } catch (e) {
+          console.error("Upload error:", e);
+          alert(`ファイルのアップロードに失敗しました: ${file.name}`);
+        } finally {
+          setUploadingFiles(prev => {
+            const next = { ...prev };
+            delete next[fileId];
+            return next;
+          });
+        }
+      }));
+    }
+
+    console.log(`[Upload Benchmark] Uploaded ${filesArray.length} files in ${(performance.now() - _startTime).toFixed(2)}ms`);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
