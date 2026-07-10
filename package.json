@@ -10,6 +10,7 @@
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
     "deploy": "npm run build && wrangler deploy",
+    "test": "npx vitest run"
     "test": "vitest"
     "test": "vitest",
     "test:run": "vitest run"
